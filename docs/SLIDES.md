@@ -11,21 +11,37 @@ paginate: true
 
 ---
 
-# タイムスケジュール
+<!-- omit in toc -->
+## 目次
+
+1. [はじめに](#はじめに)
+2. [goroutine](#goroutine)
+3. [channel](#channel)
+4. [ワーカープール](#ワーカープール)
+5. [並行処理パターン集](#並行処理パターン集)
+6. [ハンズオン](#ハンズオン)
+
+---
+
+# はじめに
+
+---
+
+## タイムスケジュール
 
 | 時間 | 内容 |
 |------|------|
 | 00:00-00:25 | この講義 |
-| 00:25-00:37 | Phase 1（逐次処理） |
-| 00:37-00:52 | Phase 2（並行処理1） |
-| 00:52-01:05 | Phase 3（並行処理2） |
-| 01:05-01:20 | Phase 4（さらなる高速化） |
+| 00:25-00:37 | Phase 1(逐次処理) |
+| 00:37-00:52 | Phase 2(並行処理1) |
+| 00:52-01:05 | Phase 3(並行処理2) |
+| 01:05-01:20 | Phase 4(さらなる高速化) |
 | 01:20-01:25 | 最終計測 |
 | 01:25-01:30 | 結果発表 |
 
 ---
 
-# お題
+## お題
 
 「このログ、急ぎで解析して」
 
@@ -34,11 +50,11 @@ paginate: true
 
 ---
 
-# 逐次処理だと
+## 逐次処理だと
 
 ```go
 for _, file := range files {
-    result := processFile(file) 
+    result := processFile(file)
 }
 ```
 
@@ -46,7 +62,7 @@ for _, file := range files {
 
 ---
 
-# なぜ遅いのか
+## なぜ遅いのか
 
 ```
 時間 →
@@ -60,7 +76,7 @@ CPUは暇な時間が多い。ファイルI/Oの待ち時間がもったいな�
 
 ---
 
-# 並行処理なら
+## 並行処理なら
 
 ```
 時間 →
@@ -76,12 +92,11 @@ CPUは暇な時間が多い。ファイルI/Oの待ち時間がもったいな�
 
 ---
 
-
 # goroutine
 
 ---
 
-# goroutine とは
+## goroutine とは
 
 Go が提供する「軽量な実行単位」のこと。
 
@@ -90,7 +105,7 @@ goroutine を使うと、関数の完了を待たずに次の処理に進める�
 
 ---
 
-# go キーワード
+## go キーワード
 
 ```go
 // 普通に呼ぶ → processFile が終わるまで待つ
@@ -106,7 +121,7 @@ go processFile("access_001.json")
 
 ---
 
-# 何が起きているのか
+## 何が起きているのか
 
 ```go
 func main() {
@@ -121,25 +136,25 @@ func main() {
 
 ---
 
-# goroutine が軽い理由
+## goroutine が軽い理由
 
-OSスレッド（従来の並行処理）
+OSスレッド(従来の並行処理)
 
-- スタックサイズ：Linux 2〜8MB / macOS 512KB / Windows 1MB
+- スタックサイズ: Linux 2〜8MB / macOS 512KB / Windows 1MB
 - OSが管理するので切り替えコストが高い
 
-goroutine（Goの並行処理）
+goroutine(Goの並行処理)
 
-- 初期スタックサイズ：わずか2KB（Go 1.4以降）
+- 初期スタックサイズ: わずか2KB(Go 1.4以降)
 - Goランタイムが管理、必要に応じて動的に拡張・縮小
-- 最大：64bit 1GB / 32bit 250MB
+- 最大: 64bit 1GB / 32bit 250MB
 - 数千〜数万個でも問題なく動く
 
  参考: [Go runtime/stack.go](https://go.dev/src/runtime/stack.go) | [What is a goroutine? And what is their size?](https://tpaschalis.me/goroutines-size/) | [Cloudflare: How Stacks are Handled in Go](https://blog.cloudflare.com/how-stacks-are-handled-in-go/)
 
 ---
 
-# 問題: main が先に終わる
+## 問題: main が先に終わる
 
 ```go
 func main() {
@@ -156,7 +171,7 @@ goroutine が処理中でも、容赦なく終了する。
 
 ---
 
-# 図で見ると
+## 図で見ると
 
 ```
 main        [開始]──────────────────[終了] ← プログラム終了
@@ -170,7 +185,7 @@ main は goroutine の完了を待っていない。
 
 ---
 
-# 解決: sync.WaitGroup
+## 解決: sync.WaitGroup
 
 「全部終わるまで待つ」ための仕組み。
 内部にカウンタを持っていて、0になるまで待機できる。
@@ -181,12 +196,12 @@ var wg sync.WaitGroup  // カウンタは0で始まる
 
 ---
 
-# WaitGroup の使い方
+## WaitGroup の使い方
 
 ```go
 var wg sync.WaitGroup
 
-wg.Add(1)  // カウンタを1増やす（1になる）
+wg.Add(1)  // カウンタを1増やす(1になる)
 
 go func() {
     defer wg.Done()  // 終了時にカウンタを1減らす
@@ -200,7 +215,7 @@ wg.Wait()  // カウンタが0になるまでここで待つ
 
 ---
 
-# カウンタの動きを追う
+## カウンタの動きを追う
 
 ```go
 var wg sync.WaitGroup        // カウンタ: 0
@@ -217,7 +232,7 @@ fmt.Println("完了")
 
 ---
 
-# 複数の goroutine を待つ
+## 複数の goroutine を待つ
 
 ```go
 var wg sync.WaitGroup
@@ -237,7 +252,7 @@ wg.Wait()  // 全部終わるまで待つ
 
 ---
 
-# なぜ defer を使うのか
+## なぜ defer を使うのか
 
 ```go
 go func() {
@@ -246,14 +261,14 @@ go func() {
 }()
 ```
 
-`defer` は「この関数が終わるとき（正常でもpanicでも）に実行」という意味。
+`defer` は「この関数が終わるとき(正常でもpanicでも)に実行」という意味。
 
 processFile でエラーが起きても、Done() は必ず呼ばれる。
 カウンタが減らないまま残る事故を防げる。
 
 ---
 
-# Go 1.25: WaitGroup.Go()
+## Go 1.25: WaitGroup.Go()
 
 Go 1.25 から、もっと簡単に書ける新しいメソッドが追加された。
 
@@ -279,7 +294,7 @@ wg.Go(func() {
 
 ---
 
-# WaitGroup.Go() の利点
+## WaitGroup.Go() の利点
 
 1つ目: Add/Done の書き忘れを防ぐ
 
@@ -300,10 +315,10 @@ wg.Go(func() {
 
 ---
 
-# ロジックは分けておく
+## ロジックは分けておく
 
 ```go
-// ビジネスロジック（並行処理を知らない）
+// ビジネスロジック(並行処理を知らない)
 func processFile(name string) Result {
     // ファイルを開いて処理して返す
 }
@@ -320,22 +335,20 @@ processFile は「自分が goroutine で呼ばれているか」を知らなく
 
 ---
 
-
-
-## channel
+# channel
 
 ---
 
-# 新しい問題
+## 新しい問題
 
 goroutine で処理を並行化できた。
-でも、各 goroutine の結果をどうやって集める？
+でも、各 goroutine の結果をどうやって集める?
 
 ```go
 for _, file := range files {
     go func(f string) {
         result := processFile(f)
-        // この result をどこに返す？
+        // この result をどこに返す?
     }(file)
 }
 // ここで全ファイルの結果を集計したい
@@ -343,7 +356,7 @@ for _, file := range files {
 
 ---
 
-# channel とは
+## channel とは
 
 goroutine 同士がデータをやり取りするための「通り道」。
 
@@ -358,10 +371,10 @@ goroutine 同士がデータをやり取りするための「通り道」。
 
 ---
 
-# channel の作り方と使い方
+## channel の作り方と使い方
 
 ```go
-// channel を作る（int型の値を流せる）
+// channel を作る(int型の値を流せる)
 ch := make(chan int)
 
 // 値を送る
@@ -377,24 +390,24 @@ value := <-ch
 
 ---
 
-# 送信と受信の対応
+## 送信と受信の対応
 
 ```go
 ch := make(chan int)
 
-// 送る側（別の goroutine で）
+// 送る側(別の goroutine で)
 go func() {
     ch <- 42  // 42 を channel に送る
 }()
 
-// 受け取る側（main で）
+// 受け取る側(main で)
 value := <-ch  // channel から値を受け取る
 fmt.Println(value)  // 42
 ```
 
 ---
 
-# ブロックとは？
+## ブロックとは?
 
 「ブロック」= goroutine が一時停止する状態
 
@@ -410,7 +423,7 @@ fmt.Println(value)  // 42
 
 ---
 
-# 送信時のブロック
+## 送信時のブロック
 
 バッファなしの channel で送信すると、受信側が現れるまで**ブロック**
 
@@ -418,14 +431,14 @@ fmt.Println(value)  // 42
 
 1. 実行中: `ch <- 42` を実行しようとする
 2. **ブロック開始**: 受信側がいない → この場で停止
-3. 待機中: 他の goroutine は動いている（自分だけ止まる）
-4. **ブロック解除**: 受信側が現れた！
+3. 待機中: 他の goroutine は動いている(自分だけ止まる)
+4. **ブロック解除**: 受信側が現れた!
 5. 実行再開: 値を渡して次の行へ進む
 
 ```go
 go func() {
     fmt.Println("送信前")
-    ch <- 42  // ← ここでブロック（止まる）
+    ch <- 42  // ← ここでブロック(止まる)
     fmt.Println("送信後")  // ← ブロック解除後に実行
 }()
 ```
@@ -434,28 +447,28 @@ goroutine は止まっているが、プログラム全体は動いている
 
 ---
 
-# 受信時のブロック
+## 受信時のブロック
 
-受信も同様にブロックする（送信側が現れるまで）
+受信も同様にブロックする(送信側が現れるまで)
 
 受信側 goroutine の状態変化:
 
 1. 実行中: `<-ch` を実行しようとする
 2. **ブロック開始**: 送信側がいない → この場で停止
 3. 待機中: 値が来るまで待つ
-4. **ブロック解除**: 送信側が値を送ってきた！
+4. **ブロック解除**: 送信側が値を送ってきた!
 5. 実行再開: 値を受け取って次の行へ進む
 
 ```go
 func main() {
-    value := <-ch  // ← ここでブロック（止まる）
+    value := <-ch  // ← ここでブロック(止まる)
     fmt.Println(value)  // ← ブロック解除後に実行
 }
 ```
 
 ---
 
-# なぜブロックするのか
+## なぜブロックするのか
 
 channel は「データの受け渡し場所」ではなく「待ち合わせ場所」
 
@@ -477,9 +490,9 @@ channel は「データの受け渡し場所」ではなく「待ち合わせ場
 - 中途半端な状態を防ぐ
 
 ```text
-送信側: 「42を渡したい」 → ブロック（待機）
+送信側: 「42を渡したい」 → ブロック(待機)
 受信側:                    → 「受け取る準備OK」
-        ← 42 が渡される → （ブロック解除）
+        ← 42 が渡される → (ブロック解除)
 送信側: 「渡せた、次へ進む」
 ```
 
@@ -489,7 +502,7 @@ channel は「データの受け渡し場所」ではなく「待ち合わせ場
 
 ---
 
-# 結果を集める
+## 結果を集める
 
 ```go
 results := make(chan Result)
@@ -510,7 +523,7 @@ for i := 0; i < len(files); i++ {
 
 ---
 
-# 流れを図で見る
+## 流れを図で見る
 
 ```
 main          files を回して goroutine を起動
@@ -526,23 +539,17 @@ main          results から len(files) 回受信して集計
 
 ---
 
-# このパターンのポイント
+## このパターンのポイント
 
-- goroutine は結果を channel に送るだけ（集計は知らない）
+- goroutine は結果を channel に送るだけ(集計は知らない)
 - main 側で必要な回数だけ受信して集計
-- 送信回数と受信回数を一致させる（これ重要）
+- 送信回数と受信回数を一致させる(これ重要)
 
 今日の Phase 2 はこれを使う
 
 ---
 
-
-
-## ハマりどころ
-
----
-
-# デッドロック
+## ハマりどころ: デッドロック
 
 全ての goroutine が何かを待っていて、誰も先に進めない状態。
 
@@ -559,7 +566,7 @@ Go ランタイムがこれを検出してプログラムを止めてくれる�
 
 ---
 
-# なぜデッドロックになるのか
+## なぜデッドロックになるのか
 
 ```go
 func main() {
@@ -576,16 +583,16 @@ func main() {
 
 ---
 
-# 解決策: 送信と受信を別の goroutine で
+## 解決策: 送信と受信を別の goroutine で
 
 ```go
 func main() {
     ch := make(chan int)
-    
+
     go func() {
         ch <- 42  // 別の goroutine で送信
     }()
-    
+
     fmt.Println(<-ch)  // main で受信
 }
 ```
@@ -594,7 +601,7 @@ func main() {
 
 ---
 
-# デッドロックを防ぐコツ
+## デッドロックを防ぐコツ
 
 1. 送信回数と受信回数を一致させる。
    50個送るなら、50回受け取る
@@ -609,13 +616,11 @@ func main() {
 
 ---
 
-
-
-## ワーカープール
+# ワーカープール
 
 ---
 
-# Phase 2 の方法の問題点
+## Phase 2 の方法の問題点
 
 ```go
 for _, file := range files {
@@ -626,30 +631,30 @@ for _, file := range files {
 ```
 
 50ファイルなら50個の goroutine が同時に動く。
-これは問題ないが、5000ファイルだったら？
+これは問題ないが、5000ファイルだったら?
 
 ---
 
-# 大量の goroutine の問題
+## 大量の goroutine の問題
 
 goroutine は軽量だが、無制限に作ると問題が起きる
 
 - メモリ消費
-    - 1個あたり約2.7KB使う（最初は2KBだが、実際は少し増える）
+    - 1個あたり約2.7KB使う(最初は2KBだが、実際は少し増える)
     - 例: 5000個なら約13MB、100万個なら約2.6GB
     - 大量に作ると、メモリが足りなくなる可能性
-    
+
 
 - ファイルを同時に開ける数に上限がある
     - OS には「一度に開けるファイル数」の制限がある
-    - macOS: 256個まで / Linux: 1024個まで（デフォルト）
+    - macOS: 256個まで / Linux: 1024個まで(デフォルト)
     - 確認方法: ターミナルで `ulimit -n` を実行
     - 50ファイルなら問題ないが、5000ファイルだと上限に引っかかる
 
 - CPU で同時に動けるのは限られている
     - 8コアのマシンで5000個の goroutine を起動しても
     - 実際に CPU 上で同時に実行されるのは最大8個だけ
-    - 残りは順番待ち（切り替えながら実行）
+    - 残りは順番待ち(切り替えながら実行)
     - 切り替えの処理にもコストがかかる
 
 結論: goroutine の数を適切に制限した方が効率的
@@ -658,7 +663,7 @@ goroutine は軽量だが、無制限に作ると問題が起きる
 
 ---
 
-# ワーカープールの考え方
+## ワーカープールの考え方
 
 「仕事をするワーカー」を固定数だけ先に用意しておく。
 ワーカーは「仕事キュー」から仕事を取って処理する。
@@ -668,7 +673,7 @@ goroutine は軽量だが、無制限に作ると問題が起きる
 仕事 → [file1][file2][file3]...
               ↓
         ┌─────┼─────┐
-     worker1  worker2  worker3  （固定数）
+     worker1  worker2  worker3  (固定数)
         │      │       │
         └──────┼───────┘
                ↓
@@ -677,7 +682,7 @@ goroutine は軽量だが、無制限に作ると問題が起きる
 
 ---
 
-# ワーカープールの実装（前半）
+## ワーカープールの実装(前半)
 
 ```go
 numWorkers := runtime.NumCPU()  // CPUコア数
@@ -696,7 +701,7 @@ for i := 0; i < numWorkers; i++ {
 
 ---
 
-# for range channel の動き
+## for range channel の動き
 
 ```go
 for file := range jobs {
@@ -720,7 +725,7 @@ close されると、バッファ内の残りの値を全て処理してから�
 
 ---
 
-# ワーカープールの実装（後半）
+## ワーカープールの実装(後半)
 
 ```go
 // 仕事を投げる
@@ -738,7 +743,7 @@ for i := 0; i < len(files); i++ {
 
 ---
 
-# close の役割
+## close の役割
 
 close は「もう値を送らない」という合図
 
@@ -748,30 +753,30 @@ close(jobs)  // jobsチャネルを閉じる
 
 **close は送信側だけが実行すべき、受信側は禁止**
 
-- ✓ 送信側（書き込む側）だけがcloseできる
-- ✗ 受信側（読み込む側）はcloseしてはいけない
-- ✓ channelは1回だけcloseできる（2回目はpanic）
+- ✓ 送信側(書き込む側)だけがcloseできる
+- ✗ 受信側(読み込む側)はcloseしてはいけない
+- ✓ channelは1回だけcloseできる(2回目はpanic)
 
 ---
 
-# close すると何が起きる？
+## close すると何が起きる?
 
-送信側（main）
+送信側(main)
 
 - `close(jobs)` を呼ぶ
 - これ以降、送信できなくなる
 - 送信すると → panic 発生
 
-受信側（ワーカー）
+受信側(ワーカー)
 
 - `for file := range jobs` が終了条件を検知
 - バッファに残っている値は全て処理できる
 - 全て処理したらループを抜ける
-- その後の受信 → ゼロ値が返る（ブロックしない）
+- その後の受信 → ゼロ値が返る(ブロックしない)
 
 ---
 
-# close を忘れるとどうなる？
+## close を忘れるとどうなる?
 
 ```go
 for _, file := range files {
@@ -794,28 +799,28 @@ for _, file := range files {
 
 ---
 
-# バッファなし channel の動き
+## バッファなし channel の動き
 
 ```go
-ch := make(chan int)  // バッファサイズ: 0（デフォルト）
+ch := make(chan int)  // バッファサイズ: 0(デフォルト)
 ```
 
 送信側の動き:
 
 1. 値を送ろうとする `ch <- 42`
-2. 受信側が準備できるまで **待つ**（ブロック） ← **送信側は止まる**
+2. 受信側が準備できるまで **待つ**(ブロック) ← **送信側は止まる**
 3. 受信側が受け取ったら、次に進める
 
 受信側の動き:
 
 1. 値を受け取ろうとする `<-ch`
-2. 送信側が送るまで **待つ**（ブロック） ← **受信側も止まる**
+2. 送信側が送るまで **待つ**(ブロック) ← **受信側も止まる**
 3. 送信側が送ったら、値を受け取って次に進める
 
 
 ---
 
-# バッファ付き channel の動き
+## バッファ付き channel の動き
 
 ```go
 ch := make(chan int, 3)  // バッファサイズ: 3
@@ -825,20 +830,20 @@ ch := make(chan int, 3)  // バッファサイズ: 3
 
 1. 値を送る `ch <- 42`
 2. **バッファに空きがあれば**、すぐに次に進める ← **送信側は待たない**
-3. バッファが満杯なら、空くまで待つ（ブロック）
+3. バッファが満杯なら、空くまで待つ(ブロック)
 
 受信側の動き:
 
 1. 値を受け取ろうとする `<-ch`
 2. **バッファに値があれば**、すぐに受け取って次に進める ← **受信側も待たない**
-3. バッファが空なら、値が来るまで待つ（ブロック）
+3. バッファが空なら、値が来るまで待つ(ブロック)
 
 
 ---
 
-# バッファあり/なし の使い分け
+## バッファあり/なし の使い分け
 
-バッファなし（デフォルト）の使いどころ:
+バッファなし(デフォルト)の使いどころ:
 
 - 送信側と受信側を厳密に同期させたい
 - 「確実に受け取られた」ことを確認したい
@@ -851,7 +856,7 @@ ch := make(chan int, 3)  // バッファサイズ: 3
 
 ---
 
-# ワーカープールでバッファを使う理由
+## ワーカープールでバッファを使う理由
 
 ```go
 numWorkers := runtime.NumCPU()
@@ -875,9 +880,9 @@ results := make(chan Result, len(files))   // バッファあり
 
 ---
 
-# ワーカープールのポイント
+## ワーカープールのポイント
 
-- 固定数のワーカーを先に起動（CPU コア数など）
+- 固定数のワーカーを先に起動(CPU コア数など)
 - jobs channel から仕事を取り出して処理
 - `close(jobs)` でワーカーに「もう仕事はない」と伝える
 - 同時実行数をコントロールできる
@@ -886,17 +891,15 @@ results := make(chan Result, len(files))   // バッファあり
 
 ---
 
-
-
 # 並行処理パターン集
 
 ---
 
-# なぜパターンを学ぶのか
+## なぜパターンを学ぶのか
 
 並行処理には「よくある問題」と「定番の解決策」がある。
 
-パターンを知っていれば：
+パターンを知っていれば:
 - 車輪の再発明を避けられる
 - バグを踏みにくくなる
 - コードを読むときに意図がわかる
@@ -905,13 +908,11 @@ results := make(chan Result, len(files))   // バッファあり
 
 ---
 
-
-
-### パターン1: Generator
+## パターン1: Generator
 
 ---
 
-# Generator とは
+## Generator とは
 
 channel を返す関数。データソースを抽象化できる。
 
@@ -930,7 +931,7 @@ func generateNumbers(n int) <-chan int {
 
 ---
 
-# Generator の使い方
+## Generator の使い方
 
 ```go
 // 使う側はデータの生成方法を知らなくていい
@@ -946,7 +947,7 @@ for num := range generateNumbers(10) {
 
 ---
 
-# Generator の応用例
+## Generator の応用例
 
 ```go
 // ファイルから1行ずつ読む Generator
@@ -969,13 +970,11 @@ func readLines(filename string) <-chan string {
 
 ---
 
-
-
-### パターン2: Pipeline
+## パターン2: Pipeline
 
 ---
 
-# Pipeline とは
+## Pipeline とは
 
 処理を段階に分けて、channel で繋ぐパターン。
 
@@ -989,7 +988,7 @@ func readLines(filename string) <-chan string {
 
 ---
 
-# Pipeline の実装例
+## Pipeline の実装例
 
 ```go
 // Stage 1: 数値を生成
@@ -1007,7 +1006,7 @@ func generate(nums ...int) <-chan int {
 
 ---
 
-# Pipeline の実装例（続き）
+## Pipeline の実装例(続き)
 
 ```go
 // Stage 2: 2倍にする
@@ -1025,7 +1024,7 @@ func double(in <-chan int) <-chan int {
 
 ---
 
-# Pipeline を繋げる
+## Pipeline を繋げる
 
 ```go
 // パイプラインを構築
@@ -1043,21 +1042,19 @@ for n := range quadrupled {
 
 ---
 
-# Pipeline のメリット
+## Pipeline のメリット
 
 - 関心の分離: 各ステージは自分の仕事だけに集中
 - 再利用性: ステージを組み替えて別のパイプラインを作れる
-- 並行性: 各ステージが同時に動く（Stage1が次を出力している間にStage2が処理）
+- 並行性: 各ステージが同時に動く(Stage1が次を出力している間にStage2が処理)
 
 ---
 
-
-
-### パターン3: Fan-out / Fan-in
+## パターン3: Fan-out / Fan-in
 
 ---
 
-# Fan-out とは
+## Fan-out とは
 
 1つの入力を複数のワーカーに分散させること。
 
@@ -1071,7 +1068,7 @@ for n := range quadrupled {
 
 ---
 
-# Fan-out の実装
+## Fan-out の実装
 
 ```go
 // 同じ channel から複数のワーカーが読む
@@ -1095,7 +1092,7 @@ for _, job := range allJobs {
 
 ---
 
-# Fan-in とは
+## Fan-in とは
 
 複数の channel を1つにまとめること。
 
@@ -1109,13 +1106,13 @@ for _, job := range allJobs {
 
 ---
 
-# Fan-in の実装
+## Fan-in の実装
 
 ```go
 func fanIn(channels ...<-chan int) <-chan int {
     out := make(chan int)
     var wg sync.WaitGroup
-    
+
     for _, ch := range channels {
         wg.Add(1)
         go func(c <-chan int) {
@@ -1125,7 +1122,7 @@ func fanIn(channels ...<-chan int) <-chan int {
             }
         }(ch)
     }
-    
+
     go func() {
         wg.Wait()
         close(out)
@@ -1136,7 +1133,7 @@ func fanIn(channels ...<-chan int) <-chan int {
 
 ---
 
-# Fan-in の使い方
+## Fan-in の使い方
 
 ```go
 ch1 := generateNumbers(5)
@@ -1151,17 +1148,15 @@ for n := range merged {
 }
 ```
 
-注意: 出力の順序は保証されない（先に来たものから出る）
+注意: 出力の順序は保証されない(先に来たものから出る)
 
 ---
 
-
-
-### パターン4: select
+## パターン4: select
 
 ---
 
-# select とは
+## select とは
 
 複数の channel を同時に待ち受ける構文。
 
@@ -1178,7 +1173,7 @@ case msg := <-ch2:
 
 ---
 
-# select の動作
+## select の動作
 
 ```go
 select {
@@ -1200,7 +1195,7 @@ default:
 
 ---
 
-# select の使い所
+## select の使い所
 
 1. 複数のデータソースから受信
 2. タイムアウトの実装
@@ -1211,13 +1206,11 @@ default:
 
 ---
 
-
-
-### パターン5: Done Channel（キャンセル）
+## パターン5: Done Channel(キャンセル)
 
 ---
 
-# なぜキャンセルが必要か
+## なぜキャンセルが必要か
 
 goroutine は起動したら勝手に終わらない。
 
@@ -1233,10 +1226,10 @@ go func() {
 
 ---
 
-# Done Channel パターン
+## Done Channel パターン
 
 ```go
-done := make(chan struct{})  // 空の struct（メモリ0バイト）
+done := make(chan struct{})  // 空の struct(メモリ0バイト)
 
 go func() {
     for {
@@ -1256,7 +1249,7 @@ close(done)
 
 ---
 
-# なぜ struct{} を使うのか
+## なぜ struct{} を使うのか
 
 ```go
 done := make(chan struct{})
@@ -1272,7 +1265,7 @@ close(done)  // 全ての <-done が解除される
 
 ---
 
-# 複数の goroutine を止める
+## 複数の goroutine を止める
 
 ```go
 done := make(chan struct{})
@@ -1298,13 +1291,11 @@ close(done)
 
 ---
 
-
-
-### パターン6: Timeout
+## パターン6: Timeout
 
 ---
 
-# タイムアウトの必要性
+## タイムアウトの必要性
 
 外部APIの呼び出しなど、いつまでも待てない処理がある。
 
@@ -1312,7 +1303,7 @@ close(done)
 
 ---
 
-# time.After を使ったタイムアウト
+## time.After を使ったタイムアウト
 
 ```go
 select {
@@ -1327,18 +1318,18 @@ case <-time.After(3 * time.Second):
 
 ---
 
-# 処理全体にタイムアウトをかける
+## 処理全体にタイムアウトをかける
 
 ```go
 func fetchWithTimeout(url string) (string, error) {
     result := make(chan string)
-    
+
     go func() {
         // 時間のかかる処理
         body := fetch(url)
         result <- body
     }()
-    
+
     select {
     case body := <-result:
         return body, nil
@@ -1350,13 +1341,11 @@ func fetchWithTimeout(url string) (string, error) {
 
 ---
 
-
-
-### パターン7: Semaphore
+## パターン7: Semaphore
 
 ---
 
-# Semaphore とは
+## Semaphore とは
 
 同時実行数を制限する仕組み。
 
@@ -1364,15 +1353,15 @@ func fetchWithTimeout(url string) (string, error) {
 
 ---
 
-# バッファ付き channel で Semaphore
+## バッファ付き channel で Semaphore
 
 ```go
 // 同時に3つまで
 sem := make(chan struct{}, 3)
 
 for _, task := range tasks {
-    sem <- struct{}{}  // トークンを取得（空きがなければ待つ）
-    
+    sem <- struct{}{}  // トークンを取得(空きがなければ待つ)
+
     go func(t Task) {
         defer func() { <-sem }()  // 終わったらトークンを返す
         process(t)
@@ -1382,7 +1371,7 @@ for _, task := range tasks {
 
 ---
 
-# Semaphore の動き
+## Semaphore の動き
 
 ```
 バッファサイズ: 3
@@ -1390,7 +1379,7 @@ for _, task := range tasks {
 task1 開始 → sem: [●][_][_]
 task2 開始 → sem: [●][●][_]
 task3 開始 → sem: [●][●][●]
-task4 開始 → 待機...（空きがない）
+task4 開始 → 待機...(空きがない)
 task1 終了 → sem: [_][●][●]
 task4 開始 → sem: [●][●][●]
 ```
@@ -1399,7 +1388,7 @@ task4 開始 → sem: [●][●][●]
 
 ---
 
-# ワーカープールとの違い
+## ワーカープールとの違い
 
 ワーカープール
 - 固定数のワーカーを先に起動
@@ -1413,23 +1402,21 @@ Semaphore の方がシンプルだが、goroutine の起動コストがかかる
 
 ---
 
-
-
-### パターン8: Rate Limiting
+## パターン8: Rate Limiting
 
 ---
 
-# Rate Limiting とは
+## Rate Limiting とは
 
 単位時間あたりの処理数を制限すること。
 
-例：「1秒に10リクエストまで」
+例:「1秒に10リクエストまで」
 
 APIのレート制限を守るときなどに使う。
 
 ---
 
-# time.Tick を使った Rate Limiting
+## time.Tick を使った Rate Limiting
 
 ```go
 // 100ms ごとに1つ処理 = 1秒に10個
@@ -1445,7 +1432,7 @@ for _, req := range requests {
 
 ---
 
-# バースト対応の Rate Limiting
+## バースト対応の Rate Limiting
 
 最初の数個は即座に処理し、その後は制限をかけたい場合。
 
@@ -1466,7 +1453,7 @@ go func() {
 
 ---
 
-# バースト対応の使い方
+## バースト対応の使い方
 
 ```go
 for _, req := range requests {
@@ -1479,13 +1466,11 @@ for _, req := range requests {
 
 ---
 
-
-
-### パターン9: context.Context
+## パターン9: context.Context
 
 ---
 
-# context.Context とは
+## context.Context とは
 
 Go 1.7 で導入された、キャンセル・タイムアウト・値の受け渡しを統合した仕組み。
 
@@ -1493,7 +1478,7 @@ Done channel + Timeout + 値の受け渡しをまとめたもの。
 
 ---
 
-# context の基本
+## context の基本
 
 ```go
 // 空の context を作る
@@ -1511,7 +1496,7 @@ ctx, cancel := context.WithDeadline(context.Background(), deadline)
 
 ---
 
-# context を使ったキャンセル
+## context を使ったキャンセル
 
 ```go
 func worker(ctx context.Context) {
@@ -1533,13 +1518,13 @@ func worker(ctx context.Context) {
 
 ---
 
-# context の伝播
+## context の伝播
 
 ```go
 func main() {
     ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
     defer cancel()
-    
+
     result, err := fetchData(ctx)
 }
 
@@ -1553,9 +1538,9 @@ func fetchData(ctx context.Context) (Data, error) {
 
 ---
 
-# context を使うべき場面
+## context を使うべき場面
 
-- HTTP ハンドラ（リクエストごとにキャンセル可能に）
+- HTTP ハンドラ(リクエストごとにキャンセル可能に)
 - データベースクエリ
 - 外部 API 呼び出し
 - 長時間実行されるバックグラウンド処理
@@ -1564,7 +1549,7 @@ func fetchData(ctx context.Context) (Data, error) {
 
 ---
 
-# context 使用時の注意
+## context 使用時の注意
 
 ```go
 ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -1577,13 +1562,11 @@ defer cancel()  // 必ず呼ぶ
 
 ---
 
-
-
 ## パターンの選び方
 
 ---
 
-# やりたいこと → パターン対応表
+## やりたいこと → パターン対応表
 
 | やりたいこと | パターン |
 |------------|---------|
@@ -1599,7 +1582,7 @@ defer cancel()  // 必ず呼ぶ
 
 ---
 
-# 実務での組み合わせ例
+## 実務での組み合わせ例
 
 Web クローラー
 ```
@@ -1619,7 +1602,7 @@ URL Generator → Worker Pool(Fan-out) → 結果収集(Fan-in)
 
 ---
 
-# パターン選択のコツ
+## パターン選択のコツ
 
 1. まず問題を明確に: 何を並行化したいのか
 2. シンプルに始める: いきなり複雑なパターンを使わない
@@ -1628,7 +1611,7 @@ URL Generator → Worker Pool(Fan-out) → 結果収集(Fan-in)
 
 ---
 
-# 今日のハンズオンで使うパターン
+## 今日のハンズオンで使うパターン
 
 Phase 2: Fan-out + 結果収集
 - goroutine を起動して channel で結果を集める
@@ -1640,33 +1623,33 @@ Phase 3: Worker Pool
 
 ---
 
-
-
-## ハンズオン
+# ハンズオン
 
 ---
 
-# 4つの Phase
+## 4つの Phase
 
-Phase 1（12分） 逐次処理
+Phase 1(12分) 逐次処理
 　goroutine 禁止、まず動くものを作る → 基準タイム
 
-Phase 2（15分） 並行処理
+Phase 2(15分) 並行処理
 　goroutine + channel 解禁、5〜10倍を目指す
 
-Phase 3（13分） ワーカープール
+Phase 3(13分) ワーカープール
 　固定数のgoroutineで処理、Go 1.25の WaitGroup.Go() を活用
 
-Phase 4（15分） さらなる高速化
+Phase 4(15分) さらなる高速化
 　制約なし、あらゆる最適化手法にチャレンジ
 
  参考: [Go 1.25 Release Notes](https://go.dev/doc/go1.25) | [WaitGroup.Go - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup.Go)
 
 ---
 
-# ルール
+## ルール
 
 - 2人1組で進める
-- 改善率で競う（PCスペック差を吸収）
+- 改善率で競う(PCスペック差を吸収)
 - 隣に聞いてOK、教え合い推奨
 - 困ったら手を挙げて
+
+---
