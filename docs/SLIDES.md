@@ -11,7 +11,7 @@ paginate: true
 
 ---
 
-# 時間割
+# タイムスケジュール
 
 | 時間 | 内容 |
 |------|------|
@@ -26,16 +26,16 @@ paginate: true
 
 ---
 
-# 今日のお題
+# お題
 
 「このログ、急ぎで解析して」
 
-- 50ファイル × 67,000行 = **335万行**
+- 50ファイル × 67,000行 = 335万行
 - ステータスコード別にカウントしたい
 
 ---
 
-# 逐次処理だと...
+# 逐次処理だと
 
 ```go
 for _, file := range files {
@@ -43,7 +43,7 @@ for _, file := range files {
 }
 ```
 
-50ファイルを1つずつ処理 → 1ファイルあたり1秒かかるとすると → **約50秒かかる**
+50ファイルを1つずつ処理 → 1ファイルあたり1秒かかるとすると → 約50秒かかる
 
 ---
 
@@ -71,9 +71,9 @@ CPUは暇な時間が多い。ファイルI/Oの待ち時間がもったいな�
     ...
 ```
 
-複数のファイルを同時に処理 → **数秒で終わる**
+複数のファイルを同時に処理 → 数秒で終わる
 
-今日はこの仕組みを理解して実装する。
+この仕組みを理解して実装する。
 
 ---
 
@@ -103,7 +103,7 @@ go processFile("access_001.json")
 
 `go` を付けるだけで、その関数は別の流れで実行される。
 
-** 参考:** [Go Spec - Go statements](https://go.dev/ref/spec#Go_statements) | [Effective Go - Goroutines](https://go.dev/doc/effective_go#goroutines)
+ 参考: [Go Spec - Go statements](https://go.dev/ref/spec#Go_statements) | [Effective Go - Goroutines](https://go.dev/doc/effective_go#goroutines)
 
 ---
 
@@ -124,11 +124,11 @@ func main() {
 
 # goroutine が軽い理由
 
-**OSスレッド**（従来の並行処理）
+OSスレッド（従来の並行処理）
 - 1つあたり約1〜2MBのメモリ
 - OSが管理するので切り替えコストが高い
 
-**goroutine**（Goの並行処理）
+goroutine（Goの並行処理）
 - 1つあたり約2KBのメモリ（1000分の1）
 - Goランタイムが管理、必要に応じてスタック拡張
 - 数千〜数万個でも問題なく動く
@@ -145,7 +145,7 @@ func main() {
 }
 ```
 
-**出力: 何も表示されない**
+出力: 何も表示されない
 
 main関数が終わると、プログラム全体が終了する。
 goroutine が処理中でも、容赦なく終了する。
@@ -192,7 +192,7 @@ go func() {
 wg.Wait()  // カウンタが0になるまでここで待つ
 ```
 
-** 参考:** [sync.WaitGroup - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup)
+ 参考: [sync.WaitGroup - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup)
 
 ---
 
@@ -322,7 +322,7 @@ value := <-ch
 
 `<-` は矢印だと思えばいい。データの流れる向きを表している。
 
-** 参考:** [Go Spec - Channel types](https://go.dev/ref/spec#Channel_types) | [Go Spec - Send statements](https://go.dev/ref/spec#Send_statements) | [Go Spec - Receive operator](https://go.dev/ref/spec#Receive_operator)
+ 参考: [Go Spec - Channel types](https://go.dev/ref/spec#Channel_types) | [Go Spec - Send statements](https://go.dev/ref/spec#Send_statements) | [Go Spec - Receive operator](https://go.dev/ref/spec#Receive_operator)
 
 ---
 
@@ -345,7 +345,7 @@ fmt.Println(value)  // 42
 
 # 重要: 送信はブロックする
 
-バッファなしの channel では、**受け取る人が現れるまで送信側は待つ**。
+バッファなしの channel では、受け取る人が現れるまで送信側は待つ。
 
 ```go
 ch := make(chan int)
@@ -365,7 +365,7 @@ time.Sleep(1 * time.Second)
 # なぜブロックするのか
 
 channel はデータを「一時的に保管する場所」ではない。
-**送り手と受け手が揃ったときに、直接データを渡す**仕組み。
+送り手と受け手が揃ったときに、直接データを渡す仕組み。
 
 ```
 送信側: 「42を渡したい」 → 待機...
@@ -419,9 +419,9 @@ main          results から len(files) 回受信して集計
 
 - goroutine は結果を channel に送るだけ（集計は知らない）
 - main 側で必要な回数だけ受信して集計
-- **送信回数と受信回数を一致させる**（これ重要）
+- 送信回数と受信回数を一致させる（これ重要）
 
-**今日の Phase 2 はこれを使う**
+今日の Phase 2 はこれを使う
 
 ---
 
@@ -485,16 +485,16 @@ func main() {
 
 # デッドロックを防ぐコツ
 
-1. **送信回数と受信回数を一致させる**
+1. 送信回数と受信回数を一致させる
    50個送るなら、50回受け取る
 
-2. **送信と受信を別の goroutine で行う**
+2. 送信と受信を別の goroutine で行う
    同じ goroutine 内で両方やると詰まりやすい
 
-3. **「誰が受け取るのか」を常に意識**
+3. 「誰が受け取るのか」を常に意識
    送る前に、受け取る側が存在するか確認
 
-** 参考:** [Go Memory Model](https://go.dev/ref/mem) | [Effective Go - Channels](https://go.dev/doc/effective_go#channels)
+ 参考: [Go Memory Model](https://go.dev/ref/mem) | [Effective Go - Channels](https://go.dev/doc/effective_go#channels)
 
 ---
 
@@ -514,18 +514,18 @@ for _, file := range files {
 }
 ```
 
-50ファイルなら50個の goroutine が**同時に**動く。
+50ファイルなら50個の goroutine が同時に動く。
 これは問題ないが、5000ファイルだったら？
 
 ---
 
 # 大量の goroutine の問題
 
-- **メモリ**: 1 goroutine あたり最低2KB、5000個で10MB以上
-- **ファイルハンドル**: OSには同時に開けるファイル数の上限がある
-- **CPUコア数**: 8コアのマシンで5000並列にしても、実際に同時に動くのは8つ
+- メモリ: 1 goroutine あたり最低2KB、5000個で10MB以上
+- ファイルハンドル: OSには同時に開けるファイル数の上限がある
+- CPUコア数: 8コアのマシンで5000並列にしても、実際に同時に動くのは8つ
 
-同時実行数を**適切に制限**した方が効率的な場合がある。
+同時実行数を適切に制限した方が効率的な場合がある。
 
 ---
 
@@ -625,7 +625,7 @@ ch := make(chan int, 100)
 
 バッファがあると、受信側が追いついていなくても、バッファの空きがある限り送信できる。
 
-** 参考:** [Go Spec - Making slices, maps and channels](https://go.dev/ref/spec#Making_slices_maps_and_channels)
+ 参考: [Go Spec - Making slices, maps and channels](https://go.dev/ref/spec#Making_slices_maps_and_channels)
 
 ---
 
@@ -646,12 +646,12 @@ jobs := make(chan string, 100)
 
 # ワーカープールのポイント
 
-- **固定数のワーカー**を先に起動（CPU コア数など）
+- 固定数のワーカーを先に起動（CPU コア数など）
 - jobs channel から仕事を取り出して処理
 - `close(jobs)` でワーカーに「もう仕事はない」と伝える
 - 同時実行数をコントロールできる
 
-**今日の Phase 3 で使う**
+今日の Phase 3 で使う
 
 ---
 
@@ -708,7 +708,7 @@ for num := range generateNumbers(10) {
 }
 ```
 
-**ポイント**
+ポイント
 - 関数内で goroutine を起動し、channel を返す
 - 呼び出し側は for range で受け取るだけ
 - 生成側と消費側が疎結合になる
@@ -808,15 +808,15 @@ for n := range quadrupled {
 }
 ```
 
-**ポイント**: 各ステージは入力の channel を受け取り、出力の channel を返す
+ポイント: 各ステージは入力の channel を受け取り、出力の channel を返す
 
 ---
 
 # Pipeline のメリット
 
-- **関心の分離**: 各ステージは自分の仕事だけに集中
-- **再利用性**: ステージを組み替えて別のパイプラインを作れる
-- **並行性**: 各ステージが同時に動く（Stage1が次を出力している間にStage2が処理）
+- 関心の分離: 各ステージは自分の仕事だけに集中
+- 再利用性: ステージを組み替えて別のパイプラインを作れる
+- 並行性: 各ステージが同時に動く（Stage1が次を出力している間にStage2が処理）
 
 ---
 
@@ -920,7 +920,7 @@ for n := range merged {
 }
 ```
 
-**注意**: 出力の順序は保証されない（先に来たものから出る）
+注意: 出力の順序は保証されない（先に来たものから出る）
 
 ---
 
@@ -943,7 +943,7 @@ case msg := <-ch2:
 }
 ```
 
-**どちらか先に来た方**を処理する。
+どちらか先に来た方を処理する。
 
 ---
 
@@ -965,16 +965,16 @@ default:
 - 複数が同時に ready なら、ランダムに1つ選ばれる
 - default があると、どれも ready でなくてもブロックしない
 
-** 参考:** [Go Spec - Select statements](https://go.dev/ref/spec#Select_statements) | [Effective Go - Select](https://go.dev/doc/effective_go#select)
+ 参考: [Go Spec - Select statements](https://go.dev/ref/spec#Select_statements) | [Effective Go - Select](https://go.dev/doc/effective_go#select)
 
 ---
 
 # select の使い所
 
-1. **複数のデータソースから受信**
-2. **タイムアウトの実装**
-3. **キャンセル処理**
-4. **ノンブロッキング送受信**
+1. 複数のデータソースから受信
+2. タイムアウトの実装
+3. キャンセル処理
+4. ノンブロッキング送受信
 
 これらを見ていく。
 
@@ -1170,11 +1170,11 @@ task4 開始 → sem: [●][●][●]
 
 # ワーカープールとの違い
 
-**ワーカープール**
+ワーカープール
 - 固定数のワーカーを先に起動
 - ワーカーが仕事を取りに行く
 
-**Semaphore**
+Semaphore
 - goroutine は都度起動
 - 起動前に許可を取る
 
@@ -1298,7 +1298,7 @@ func worker(ctx context.Context) {
 
 `ctx.Done()` は、キャンセルされると close される channel を返す。
 
-** 参考:** [context package - pkg.go.dev](https://pkg.go.dev/context) | [Go blog - Context](https://go.dev/blog/context)
+ 参考: [context package - pkg.go.dev](https://pkg.go.dev/context) | [Go blog - Context](https://go.dev/blog/context)
 
 ---
 
@@ -1318,7 +1318,7 @@ func fetchData(ctx context.Context) (Data, error) {
 }
 ```
 
-**慣習**: context は関数の第1引数に渡す。
+慣習: context は関数の第1引数に渡す。
 
 ---
 
@@ -1340,9 +1340,9 @@ ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 defer cancel()  // 必ず呼ぶ
 ```
 
-- **cancel は必ず呼ぶ**: リソースリークを防ぐ
-- **context を struct に入れない**: 関数の引数で渡す
-- **nil context を渡さない**: context.TODO() を使う
+- cancel は必ず呼ぶ: リソースリークを防ぐ
+- context を struct に入れない: 関数の引数で渡す
+- nil context を渡さない: context.TODO() を使う
 
 ---
 
@@ -1370,7 +1370,7 @@ defer cancel()  // 必ず呼ぶ
 
 # 実務での組み合わせ例
 
-**Web クローラー**
+Web クローラー
 ```
 URL Generator → Worker Pool(Fan-out) → 結果収集(Fan-in)
                     ↑
@@ -1378,7 +1378,7 @@ URL Generator → Worker Pool(Fan-out) → 結果収集(Fan-in)
             Semaphore で同時接続数制限
 ```
 
-**ログ処理パイプライン**
+ログ処理パイプライン
 ```
 ファイル読み込み → パース → フィルタ → 集計
     Generator      Pipeline stages
@@ -1390,19 +1390,19 @@ URL Generator → Worker Pool(Fan-out) → 結果収集(Fan-in)
 
 # パターン選択のコツ
 
-1. **まず問題を明確に**: 何を並行化したいのか
-2. **シンプルに始める**: いきなり複雑なパターンを使わない
-3. **組み合わせる**: 1つのパターンで解決しなくていい
-4. **context を活用**: キャンセルとタイムアウトは context で統一
+1. まず問題を明確に: 何を並行化したいのか
+2. シンプルに始める: いきなり複雑なパターンを使わない
+3. 組み合わせる: 1つのパターンで解決しなくていい
+4. context を活用: キャンセルとタイムアウトは context で統一
 
 ---
 
 # 今日のハンズオンで使うパターン
 
-**Phase 2**: Fan-out + 結果収集
+Phase 2: Fan-out + 結果収集
 - goroutine を起動して channel で結果を集める
 
-**Phase 3**: Worker Pool
+Phase 3: Worker Pool
 - 固定数のワーカーで同時実行数を制御
 
 余裕があれば context でキャンセル対応を入れてみよう。
@@ -1417,26 +1417,26 @@ URL Generator → Worker Pool(Fan-out) → 結果収集(Fan-in)
 
 # 4つの Phase
 
-**Phase 1（15分）** 逐次処理
+Phase 1（15分） 逐次処理
 　goroutine 禁止、まず動くものを作る → 基準タイム
 
-**Phase 2（20分）** 並行処理
+Phase 2（20分） 並行処理
 　goroutine + channel 解禁、5〜10倍を目指す
 
-**Phase 3（17分）** ワーカープール
+Phase 3（17分） ワーカープール
 　固定数のgoroutineで処理、Go 1.25の WaitGroup.Go() を活用
 
-**Phase 4（自由課題）** さらなる高速化
+Phase 4（自由課題） さらなる高速化
 　制約なし、あらゆる最適化手法にチャレンジ
 
-** 参考:** [Go 1.25 Release Notes](https://go.dev/doc/go1.25) | [WaitGroup.Go - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup.Go)
+ 参考: [Go 1.25 Release Notes](https://go.dev/doc/go1.25) | [WaitGroup.Go - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup.Go)
 
 ---
 
 # ルール
 
 - 2人1組で進める
-- **改善率**で競う（PCスペック差を吸収）
+- 改善率で競う（PCスペック差を吸収）
 - 隣に聞いてOK、教え合い推奨
 - 困ったら手を挙げて
 
