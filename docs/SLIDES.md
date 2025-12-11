@@ -837,9 +837,9 @@ for file := range jobs {
 3. また jobs から受け取る
 4. **jobs が close されるまで繰り返す**
 
-通常の for ループとの違い:
+通常の for range ループとの違い:
 
-- 通常: `for i := 0; i < 10; i++` → 回数が決まっている
+- 通常: `for range 配列/スライス/マップ` → 回数が決まっている
 - channel: `for file := range jobs` → **終了条件 は channel が閉じること**
 
 close されると、バッファ内の残りの値を全て処理してから、ループを抜ける。
