@@ -1,7 +1,3 @@
-// Phase 1: Sequential Processing
-//
-// This solution processes log files one by one in a simple for loop.
-// No goroutines or channels are used - this is our baseline for comparison.
 package main
 
 import (
@@ -9,32 +5,28 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/nnnkkk7/go-concurrency-workshop/pkg/logparser"
 )
 
 func main() {
-	// Get list of log files
-	files, err := filepath.Glob("logs/*.log")
+	startTime := time.Now()
+
+	logDir := "../../logs"
+	files, err := filepath.Glob(filepath.Join(logDir, "access_*.json"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error finding log files: %v\n", err)
 		os.Exit(1)
 	}
 
-	if len(files) == 0 {
-		fmt.Println("No log files found in ./logs directory")
-		fmt.Println("Please run: go run cmd/loggen/main.go")
-		os.Exit(1)
-	}
+	results := processFiles(files)
 
-	fmt.Printf("Processing %d log files sequentially...\n", len(files))
+	printResults(results, time.Since(startTime))
+}
 
-	// Start timing
-	start := time.Now()
-
-	// Process files sequentially
+// processFiles はファイルを順番に処理します
+func processFiles(files []string) []*logparser.Result {
 	results := make([]*logparser.Result, 0, len(files))
 	for _, filename := range files {
 		result, err := processFile(filename)
@@ -44,18 +36,10 @@ func main() {
 		}
 		results = append(results, result)
 	}
-
-	// Merge results
-	total := logparser.MergeResults(results)
-
-	// Calculate processing time
-	elapsed := time.Since(start)
-
-	// Display results
-	printResults(total, elapsed)
+	return results
 }
 
-// processFile reads a single log file and counts status codes.
+// processFile は1つのログファイルを解析します
 func processFile(filename string) (*logparser.Result, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -63,62 +47,68 @@ func processFile(filename string) (*logparser.Result, error) {
 	}
 	defer file.Close()
 
-	result := logparser.NewResult(filename)
-	decoder := json.NewDecoder(file)
+	result := &logparser.Result{
+		FileName:     filepath.Base(filename),
+		StatusCounts: make(map[int]int),
+	}
 
+	decoder := json.NewDecoder(file)
 	for decoder.More() {
 		var entry logparser.LogEntry
 		if err := decoder.Decode(&entry); err != nil {
-			// Skip invalid lines
 			continue
 		}
-		result.AddEntry(&entry)
+		result.TotalCount++
+		result.StatusCounts[entry.Status]++
 	}
 
 	return result, nil
 }
 
-// printResults displays the analysis results in a formatted way.
-func printResults(total *logparser.TotalResult, elapsed time.Duration) {
-	fmt.Println("\n=== Access Log Analysis Results ===")
-	fmt.Printf("Total files: %d\n", total.FileCount)
-	fmt.Printf("Total requests: %s\n", formatNumber(total.TotalCount))
-	fmt.Printf("Processing time: %v\n", elapsed.Round(time.Millisecond))
-	fmt.Println()
+// printResults は処理結果を表示します
+func printResults(results []*logparser.Result, elapsed time.Duration) {
+	totalRequests := 0
+	totalStatusCounts := make(map[int]int)
 
-	fmt.Println("Status Code Distribution:")
-
-	// Sort status codes for consistent output
-	statuses := make([]int, 0, len(total.StatusCounts))
-	for status := range total.StatusCounts {
-		statuses = append(statuses, status)
-	}
-	sort.Ints(statuses)
-
-	for _, status := range statuses {
-		count := total.StatusCounts[status]
-		percentage := float64(count) / float64(total.TotalCount) * 100
-		fmt.Printf("  %d: %s (%.2f%%)\n", status, formatNumber(count), percentage)
+	for _, result := range results {
+		totalRequests += result.TotalCount
+		for status, count := range result.StatusCounts {
+			totalStatusCounts[status] += count
+		}
 	}
 
-	fmt.Println()
-	fmt.Printf("Error Rate (4xx + 5xx): %.2f%%\n", total.ErrorRate())
+	fmt.Printf("\n=== 処理結果 ===\n")
+	fmt.Printf("処理時間: %.2f秒\n", elapsed.Seconds())
+	fmt.Printf("総リクエスト数: %s件\n", formatNumber(totalRequests))
+	fmt.Printf("\nステータスコード別:\n")
+	for status := 200; status <= 599; status += 100 {
+		for s := status; s < status+100; s++ {
+			if count, ok := totalStatusCounts[s]; ok {
+				percentage := float64(count) / float64(totalRequests) * 100
+				fmt.Printf("  %d: %s件 (%.2f%%)\n", s, formatNumber(count), percentage)
+			}
+		}
+	}
+
+	errorCount := 0
+	for status, count := range totalStatusCounts {
+		if status >= 400 {
+			errorCount += count
+		}
+	}
+	errorRate := float64(errorCount) / float64(totalRequests) * 100
+	fmt.Printf("\nエラー率 (4xx, 5xx): %.2f%%\n", errorRate)
 }
 
-// formatNumber adds commas to numbers for readability.
+// formatNumber は数値を3桁カンマ区切りでフォーマットします
 func formatNumber(n int) string {
-	if n < 1000 {
-		return fmt.Sprintf("%d", n)
-	}
-
-	// Convert to string with commas
-	str := fmt.Sprintf("%d", n)
-	var result []byte
-	for i, c := range str {
-		if i > 0 && (len(str)-i)%3 == 0 {
-			result = append(result, ',')
+	s := fmt.Sprintf("%d", n)
+	result := ""
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result += ","
 		}
-		result = append(result, byte(c))
+		result += string(c)
 	}
-	return string(result)
+	return result
 }

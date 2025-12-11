@@ -1,10 +1,3 @@
-// Phase 4: Advanced Optimizations
-//
-// This solution applies various optimization techniques beyond basic worker pools:
-// - Optimized buffer sizes for channels
-// - Pre-allocated result slices
-// - Result pooling to reduce allocations
-// - Efficient channel communication patterns
 package main
 
 import (
@@ -13,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"sync"
 	"time"
 
@@ -21,44 +13,33 @@ import (
 )
 
 func main() {
-	files, err := filepath.Glob("logs/*.log")
+	startTime := time.Now()
+
+	logDir := "../../logs"
+	files, err := filepath.Glob(filepath.Join(logDir, "access_*.json"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error finding log files: %v\n", err)
 		os.Exit(1)
 	}
 
-	if len(files) == 0 {
-		fmt.Println("No log files found in ./logs directory")
-		fmt.Println("Please run: go run cmd/loggen/main.go")
-		os.Exit(1)
-	}
-
 	numWorkers := runtime.NumCPU()
-	fmt.Printf("Processing %d log files with %d workers (optimized)...\n", len(files), numWorkers)
+	results := processFiles(files, numWorkers)
 
-	start := time.Now()
-
-	results := processFilesOptimized(files, numWorkers)
-
-	total := logparser.MergeResults(results)
-
-	elapsed := time.Since(start)
-
-	printResults(total, elapsed)
+	printResults(results, time.Since(startTime))
 }
 
-// processFilesOptimized uses advanced optimization techniques
-func processFilesOptimized(files []string, numWorkers int) []*logparser.Result {
+// processFiles は最適化されたワーカープールパターンでファイルを処理します
+func processFiles(files []string, numWorkers int) []*logparser.Result {
 	fileCount := len(files)
 
-	// Use smaller buffer for jobs (only needs to hold pending work)
+	// ジョブ用にはより小さいバッファを使用（保留中の作業のみを保持）
 	jobs := make(chan string, numWorkers*2)
-	// Use larger buffer for results (holds all results)
+	// 結果用にはより大きいバッファを使用（全ての結果を保持）
 	results := make(chan *logparser.Result, fileCount)
 
 	var wg sync.WaitGroup
 
-	// Start workers
+	// ワーカーを起動
 	for i := 0; i < numWorkers; i++ {
 		wg.Go(func() {
 			for filename := range jobs {
@@ -72,7 +53,7 @@ func processFilesOptimized(files []string, numWorkers int) []*logparser.Result {
 		})
 	}
 
-	// Feed jobs (non-blocking with buffered channel)
+	// ジョブを供給（バッファ付きチャネルでノンブロッキング）
 	go func() {
 		for _, filename := range files {
 			jobs <- filename
@@ -80,13 +61,13 @@ func processFilesOptimized(files []string, numWorkers int) []*logparser.Result {
 		close(jobs)
 	}()
 
-	// Wait for all workers to finish
+	// 全てのワーカーが完了するのを待つ
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// Pre-allocate result slice with exact capacity
+	// 正確な容量で結果スライスを事前割り当て
 	resultList := make([]*logparser.Result, 0, fileCount)
 	for result := range results {
 		resultList = append(resultList, result)
@@ -95,7 +76,7 @@ func processFilesOptimized(files []string, numWorkers int) []*logparser.Result {
 	return resultList
 }
 
-// processFile processes a single file with optimized I/O
+// processFile は1つのログファイルを解析します
 func processFile(filename string) (*logparser.Result, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -103,45 +84,60 @@ func processFile(filename string) (*logparser.Result, error) {
 	}
 	defer file.Close()
 
-	result := logparser.NewResult(filename)
-	decoder := json.NewDecoder(file)
+	result := &logparser.Result{
+		FileName:     filepath.Base(filename),
+		StatusCounts: make(map[int]int),
+	}
 
+	decoder := json.NewDecoder(file)
 	for decoder.More() {
 		var entry logparser.LogEntry
 		if err := decoder.Decode(&entry); err != nil {
 			continue
 		}
-		result.AddEntry(&entry)
+		result.TotalCount++
+		result.StatusCounts[entry.Status]++
 	}
 
 	return result, nil
 }
 
-func printResults(total *logparser.TotalResult, elapsed time.Duration) {
-	fmt.Println("\n=== Access Log Analysis Results ===")
-	fmt.Printf("Total files: %d\n", total.FileCount)
-	fmt.Printf("Total requests: %s\n", formatNumber(total.TotalCount))
-	fmt.Printf("Processing time: %v\n", elapsed.Round(time.Millisecond))
-	fmt.Println()
+// printResults は処理結果を表示します
+func printResults(results []*logparser.Result, elapsed time.Duration) {
+	totalRequests := 0
+	totalStatusCounts := make(map[int]int)
 
-	fmt.Println("Status Code Distribution:")
-
-	statuses := make([]int, 0, len(total.StatusCounts))
-	for status := range total.StatusCounts {
-		statuses = append(statuses, status)
-	}
-	sort.Ints(statuses)
-
-	for _, status := range statuses {
-		count := total.StatusCounts[status]
-		percentage := float64(count) / float64(total.TotalCount) * 100
-		fmt.Printf("  %d: %s (%.2f%%)\n", status, formatNumber(count), percentage)
+	for _, result := range results {
+		totalRequests += result.TotalCount
+		for status, count := range result.StatusCounts {
+			totalStatusCounts[status] += count
+		}
 	}
 
-	fmt.Println()
-	fmt.Printf("Error Rate (4xx + 5xx): %.2f%%\n", total.ErrorRate())
+	fmt.Printf("\n=== 処理結果 ===\n")
+	fmt.Printf("処理時間: %.2f秒\n", elapsed.Seconds())
+	fmt.Printf("総リクエスト数: %s件\n", formatNumber(totalRequests))
+	fmt.Printf("\nステータスコード別:\n")
+	for status := 200; status <= 599; status += 100 {
+		for s := status; s < status+100; s++ {
+			if count, ok := totalStatusCounts[s]; ok {
+				percentage := float64(count) / float64(totalRequests) * 100
+				fmt.Printf("  %d: %s件 (%.2f%%)\n", s, formatNumber(count), percentage)
+			}
+		}
+	}
+
+	errorCount := 0
+	for status, count := range totalStatusCounts {
+		if status >= 400 {
+			errorCount += count
+		}
+	}
+	errorRate := float64(errorCount) / float64(totalRequests) * 100
+	fmt.Printf("\nエラー率 (4xx, 5xx): %.2f%%\n", errorRate)
 }
 
+// formatNumber は数値を3桁カンマ区切りでフォーマットします
 func formatNumber(n int) string {
 	s := fmt.Sprintf("%d", n)
 	result := ""
