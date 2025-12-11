@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/nnnkkk7/go-concurrency-workshop/pkg/logparser"
 )
 
 // OptimizedResult はPhase4専用の最適化版Result構造体
@@ -21,6 +20,12 @@ type OptimizedResult struct {
 	FileName     string
 	TotalCount   int
 	StatusCounts [600]int // 固定配列でステータスコード0-599をカバー
+}
+
+// MinimalLogEntry は最小限のフィールドのみをパースする構造体
+// Phase4では status フィールドのみが必要なため、他のフィールドをパースしない
+type MinimalLogEntry struct {
+	Status int `json:"status"`
 }
 
 func main() {
@@ -57,31 +62,33 @@ func main() {
 
 // processFiles は最適化されたワーカープールパターンでファイルを処理します
 func processFiles(root *os.Root, files []string, numWorkers int) []*OptimizedResult {
-	fileCount := len(files)
-
-	// ジョブチャネルは小さいバッファで十分
+	//  ジョブチャネルは小さいバッファで十分
 	jobs := make(chan string, numWorkers)
-	// 結果用にはファイル数分のバッファを使用
-	results := make(chan *OptimizedResult, fileCount)
+	//  ワーカーごとの集計結果を受け取る（ファイル数ではなくワーカー数）
+	results := make(chan *OptimizedResult, numWorkers)
 
 	var wg sync.WaitGroup
 
 	// ワーカーを起動
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		wg.Go(func() {
-			for filename := range jobs {
-				result, err := processFile(root, filename)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
-					continue
-				}
-				results <- result
+			//  ワーカーごとにローカル集計（複数ファイルを1つの結果にまとめる）
+			localResult := &OptimizedResult{
+				FileName: "worker-aggregate",
 			}
+
+			for filename := range jobs {
+				if err := processFileInto(root, filename, localResult); err != nil {
+					fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
+				}
+			}
+
+			// ワーカーが処理した全ファイルの集計結果を送信
+			results <- localResult
 		})
 	}
 
-	// 不要なgoroutineを削除して直接ジョブを送信
-	// メインgoroutineからブロッキング送信（チャネルがバッファ付きなので問題なし）
+	//  不要なgoroutineを削除して直接ジョブを送信
 	for _, filename := range files {
 		jobs <- filename
 	}
@@ -93,8 +100,8 @@ func processFiles(root *os.Root, files []string, numWorkers int) []*OptimizedRes
 		close(results)
 	}()
 
-	// 正確な容量で結果スライスを事前割り当て
-	resultList := make([]*OptimizedResult, 0, fileCount)
+	// ワーカーごとの集計結果を収集（ファイル数ではなくワーカー数分）
+	resultList := make([]*OptimizedResult, 0, numWorkers)
 	for result := range results {
 		resultList = append(resultList, result)
 	}
@@ -102,26 +109,23 @@ func processFiles(root *os.Root, files []string, numWorkers int) []*OptimizedRes
 	return resultList
 }
 
-// processFile は1つのログファイルを解析します
-func processFile(root *os.Root, filename string) (*OptimizedResult, error) {
+// processFileInto は1つのログファイルを解析して既存の結果に集計します
+// ワーカーごとのローカル集計に使用され、Result作成のオーバーヘッドを削減
+func processFileInto(root *os.Root, filename string, result *OptimizedResult) error {
 	file, err := root.Open(filename)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer file.Close()
 
-	result := &OptimizedResult{
-		FileName: filename,
-		// StatusCounts array is zero-initialized
-	}
-
-	// 256KBのバッファでI/O効率を向上
+	//  256KBのバッファでI/O効率を向上
 	bufferedReader := bufio.NewReaderSize(file, 256*1024)
-	// sonic JSONデコーダーを使用（標準ライブラリより2-5倍高速）
+	//  sonic JSONデコーダーを使用（標準ライブラリより2-5倍高速）
 	decoder := sonic.ConfigDefault.NewDecoder(bufferedReader)
 
-	// LogEntryを再利用してアロケーションを削減
-	var entry logparser.LogEntry
+	//  最小フィールドのみパースしてパース時間とメモリを削減
+	// 必要なのは status のみなので、他の7フィールド(timestamp, method, path, etc.)は無視
+	var entry MinimalLogEntry
 	for decoder.More() {
 		if err := decoder.Decode(&entry); err != nil {
 			continue
@@ -130,7 +134,7 @@ func processFile(root *os.Root, filename string) (*OptimizedResult, error) {
 		result.StatusCounts[entry.Status]++
 	}
 
-	return result, nil
+	return nil
 }
 
 // printResults は処理結果を表示します
