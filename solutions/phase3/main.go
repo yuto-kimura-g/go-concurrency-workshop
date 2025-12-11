@@ -52,9 +52,14 @@ func processFiles(root *os.Root, files []string, numWorkers int) []*logparser.Re
 	jobs := make(chan string, len(files))
 	results := make(chan *logparser.Result, len(files))
 
+	// 全てのファイルをjobsチャネルに送信
+	for _, filename := range files {
+		jobs <- filename
+	}
+	close(jobs) // これ以上ジョブが送信されないことを通知
+
 	// ワーカー調整のためのWaitGroupを作成
 	var wg sync.WaitGroup
-
 	// WaitGroup.Go()を使ってワーカーgoroutineを起動（Go 1.25+）
 	for range numWorkers {
 		wg.Go(func() {
@@ -69,12 +74,6 @@ func processFiles(root *os.Root, files []string, numWorkers int) []*logparser.Re
 			}
 		})
 	}
-
-	// 全てのファイルをjobsチャネルに送信
-	for _, filename := range files {
-		jobs <- filename
-	}
-	close(jobs) // これ以上ジョブが送信されないことを通知
 
 	// 全てのワーカーが完了したら結果チャネルを閉じる
 	go func() {

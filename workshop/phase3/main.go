@@ -50,6 +50,12 @@ func main() {
 // ============================================================
 // HINT: ワーカープールパターンを使います（固定数のgoroutineで処理）
 // Go 1.25の新機能 WaitGroup.Go() を使ってみましょう
+// - ジョブ（ファイル名）を配布するchannel
+// - 結果を集めるchannel
+// - 固定数のワーカーgoroutine
+// - ワーカー数の決定（`runtime.NumCPU()`）
+// - ジョブのchannel投入とclose
+// - 結果のchannel受信
 func processFiles(root *os.Root, files []string, numWorkers int) []*logparser.Result {
 	// まずは逐次処理版（Phase 1と同じ）
 	results := make([]*logparser.Result, 0, len(files))
