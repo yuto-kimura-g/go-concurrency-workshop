@@ -531,40 +531,58 @@ func main() {
 
 ---
 
-## なぜブロックするのか
+## channel の種類によるブロックの違い
 
-channel は「データの受け渡し場所」ではなく「待ち合わせ場所」
+- バッファなし: cap=0。送信と受信が揃うまで進まない。
+- バッファあり: cap>0。送信は空きがあれば即進み、満杯なら待つ。受信は値があれば即進み、空なら待つ。
+- nil channel: 初期化されていない。送受信は永遠にブロック。
+- close 済み: 送信は panic。受信は「バッファ/キューに残る値を全て読み終えた後」は即ゼロ値・ok=false を返し、`for range ch` もそこで終わる。
 
-ブロックの3つの役割
+```go
+// バッファなし channel
+ch1 := make(chan int)        // cap=0
+go func() { ch1 <- 1 }()     // 受信者がいなければここで止まる
+v1 := <-ch1                  // 受け取ると両方が進む
 
-1つ目: 同期を取る
+// バッファあり channel
+ch2 := make(chan int, 2)     // cap=2
+ch2 <- 1                     // 空きがあるので進む
+ch2 <- 2                     // まだ進む
+// ch2 <- 3                  // 満杯ならここで止まる
+v2 := <-ch2                  // 値があればすぐ取れる
 
-- 送信側と受信側のタイミングを合わせる
-- データが確実に受け渡される保証
+// nil channel
+var chNil chan int
+// chNil <- 1  // 永遠にブロックするので実行しない
 
-2つ目: 安全性を保つ
+// close 済み channel
+close(ch2)
+v3, ok := <-ch2              // 残りがあれば取得、なければ v3=0, ok=false
+// ch2 <- 4                  // panic: send on closed channel
+for x := range ch2 {         // 残りを読み切るとここでループ終了
+    _ = x
+}
+```
 
-- ロックや条件変数が不要
-- Go ランタイムが管理してくれる
-
-3つ目: データ競合を防ぐ
-
-- 送り手と受け手が揃うまで待つ
-- 中途半端な状態を防ぐ
-
+参考: [Go spec - Channel types](https://go.dev/ref/spec#Channel_types) | [Go spec - Send statements](https://go.dev/ref/spec#Send_statements) | [Go spec - Receive operator](https://go.dev/ref/spec#Receive_operator) | [Go spec - Close](https://go.dev/ref/spec#Close)
 
 ---
 
-## channelのブロック挙動
+## なぜブロックするのか
 
-| 状態 | いつブロックするか | いつブロックしないか |
-| --- | --- | --- |
-| バッファなし | 送り手と受け手のどちらかが不在 | 双方が揃った瞬間に進む |
-| バッファあり | 送信: 満杯 / 受信: 空 | 送信: 空きあり / 受信: データあり |
-| nil channel | 送受信どちらも永遠にブロック | なし（初期化漏れ注意） |
-| close済み | 送信はpanic | 受信は即時にゼロ値・ok=false、rangeは即終了 |
+channel は「値を渡すための待ち合わせ場所」。  
 
- 参考: [Go Spec - Channel types](https://go.dev/ref/spec#Channel_types) | [Go Memory Model](https://go.dev/ref/mem) | [Gist of Go: Channels](https://antonz.org/go-concurrency/channels/)
+ブロックの役割
+
+1. 順番をそろえる  
+   - 送信は受信者が来るまで待ち、受信は送り手を待つ  
+2. 流しすぎ・作りすぎを止める  
+   - バッファありでも満杯/空で止まるので暴走しにくい
+3. 競合しにくい書き方を助ける  
+   - 値の受け渡しを channel に限定すれば、同じメモリを同時に触らないで済む
+
+参考: [Go spec - Send/Receive](https://go.dev/ref/spec#Send_statements) | [Go Memory Model](https://go.dev/ref/mem) | [Effective Go - Share Memory By Communicating](https://go.dev/doc/effective_go#sharing) | [Go Blog - Pipelines](https://go.dev/blog/pipelines)
+
 
 ---
 
@@ -788,7 +806,7 @@ for file := range jobs {
 通常の for ループとの違い:
 
 - 通常: `for i := 0; i < 10; i++` → 回数が決まっている
-- channel: `for file := range jobs` → **終了条件 = channel が閉じる**
+- channel: `for file := range jobs` → **終了条件 は channel が閉じること**
 
 close されると、バッファ内の残りの値を全て処理してから、ループを抜ける。
 
@@ -852,7 +870,7 @@ for _, file := range files {
 // close(jobs)  ← これを忘れると...
 ```
 
-結果: **デッドロック発生**
+→デッドロック発生
 
 なぜデッドロックになるのか:
 
@@ -910,7 +928,7 @@ ch := make(chan int, 3)  // バッファサイズ: 3
 
 ## バッファあり/なし の使い分け
 
-バッファなし(デフォルト)の使いどころ:
+バッファなしの使いどころ:
 
 - 送信側と受信側を厳密に同期させたい
 - 「確実に受け取られた」ことを確認したい
@@ -934,8 +952,7 @@ results := make(chan Result, len(files))   // バッファあり
 バッファがないと:
 
 - 送信のたびにワーカーが受け取るまで待つ
-- 200ファイルなら200回ブロック
-- 非効率
+- 200ファイルなら200回ブロックしてしまう
 
 バッファがあると:
 
@@ -943,7 +960,7 @@ results := make(chan Result, len(files))   // バッファあり
 - ワーカーは自分のペースで処理
 - main も待たずに次へ進める
 
- 参考: [Go by Example: Channel Buffering](https://gobyexample.com/channel-buffering) | [Go Tour: Buffered Channels](https://go.dev/tour/concurrency/3) | [Gist of Go: Channels](https://antonz.org/go-concurrency/channels/)
+ 参考: [Go by Example: Channel Buffering](https://gobyexample.com/channel-buffering) | [Go by Example: Worker Pools](https://gobyexample.com/worker-pools) | [Go Tour: Buffered Channels](https://go.dev/tour/concurrency/3) | [Go Blog: Pipelines](https://go.dev/blog/pipelines) 
 
 ---
 
@@ -964,14 +981,8 @@ results := make(chan Result, len(files))   // バッファあり
 
 ## なぜパターンを学ぶのか
 
-並行処理には「よくある問題」と「定番の解決策」がある。
+並行処理には「よくあるパターン」がある。
 
-パターンを知っていれば:
-- 車輪の再発明を避けられる
-- バグを踏みにくくなる
-- コードを読むときに意図がわかる
-
-ここからは実務でよく使うパターンを紹介する。
 
 ---
 
@@ -1269,7 +1280,6 @@ default:
 3. キャンセル処理
 4. ノンブロッキング送受信
 
-これらを見ていく。
 
 ---
 
@@ -1296,8 +1306,7 @@ go func() {
 ## Done Channel パターン
 
 ```go
-done := make(chan struct{})  // 空の struct(メモリ0バイト)
-
+done := make(chan struct{})  
 go func() {
     for {
         select {
@@ -1451,7 +1460,7 @@ task1 終了 → sem: [_][●][●]
 task4 開始 → sem: [●][●][●]
 ```
 
-バッファが「許可証」の役割を果たす。
+バッファの空き数が同時実行できる上限になる（空きがなければ待つ）。
 
 ---
 
@@ -1629,11 +1638,7 @@ defer cancel()  // 必ず呼ぶ
 
 ---
 
-## パターンの選び方
-
----
-
-## やりたいこと → パターン対応表
+## やりたいこととパターンの対応
 
 | やりたいこと | パターン |
 |------------|---------|
@@ -1647,34 +1652,6 @@ defer cancel()  // 必ず呼ぶ
 | 同時実行数を制限 | Semaphore / Worker Pool |
 | リクエスト頻度を制限 | Rate Limiting |
 
----
-
-## 実務での組み合わせ例
-
-Web クローラー
-```
-URL Generator → Worker Pool(Fan-out) → 結果収集(Fan-in)
-                    ↑
-            context でタイムアウト
-            Semaphore で同時接続数制限
-```
-
-ログ処理パイプライン
-```
-ファイル読み込み → パース → フィルタ → 集計
-    Generator      Pipeline stages
-         ↑
-    context でキャンセル可能に
-```
-
----
-
-## パターン選択のコツ
-
-1. まず問題を明確に: 何を並行化したいのか
-2. シンプルに始める: いきなり複雑なパターンを使わない
-3. 組み合わせる: 1つのパターンで解決しなくていい
-4. context を活用: キャンセルとタイムアウトは context で統一
 
 ---
 
@@ -1702,9 +1679,8 @@ Phase 4 さらなる高速化
 
 ## ルール
 
-- 2人1組で進める
-- 改善率で競う(PCスペック差を吸収)
-- 隣に聞いてOK、教え合い推奨
-- 困ったら手を挙げて
+- 2人1組で進めてください。
+- 改善率で競う(PCスペック差を吸収します)
+- 困ったら聞いてください！
 
 ---
