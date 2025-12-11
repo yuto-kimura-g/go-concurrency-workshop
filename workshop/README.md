@@ -99,14 +99,13 @@ make w4
 詰まったときは以下を参照してください。
 
 - **[docs/HINTS.md](../docs/HINTS.md)** - ヒント
+- **[docs/SLIDES.md](../docs/SLIDES.md)** - スライド資料
 - **[solutions/](../solutions/)** - 模範解答
 
 
 ##  パフォーマンス測定
 
 各Phaseの処理時間を記録して、改善を可視化しましょう。
-
-### 自動記録
 
 各コマンドを実行すると、実行時間が自動的に `workshop/results.txt` に記録されます。
 

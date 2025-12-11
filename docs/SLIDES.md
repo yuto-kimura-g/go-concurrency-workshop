@@ -65,7 +65,6 @@ paginate: true
    - [ワーカープールでバッファを使う理由](#ワーカープールでバッファを使う理由)
    - [ワーカープールのポイント](#ワーカープールのポイント)
 5. [並行処理パターン集](#並行処理パターン集)
-   - [なぜパターンを学ぶのか](#なぜパターンを学ぶのか)
    - [パターン1: Generator](#パターン1-generator)
    - [Generator とは](#generator-とは)
    - [Generator の使い方](#generator-の使い方)
@@ -1011,12 +1010,6 @@ results := make(chan Result, len(files))   // バッファあり
 
 # 並行処理パターン集　 ʕ◔ϖ◔ʔ
 
----
-
-## なぜパターンを学ぶのか
-
-並行処理には「よくあるパターン」がある。
-
 
 ---
 
@@ -1706,8 +1699,6 @@ Phase 3 ワーカープール
 
 Phase 4 さらなる高速化
 　- 制約なし
-
- 参考: [Go 1.25 Release Notes](https://go.dev/doc/go1.25) | [WaitGroup.Go - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup.Go)
 
 ---
 
