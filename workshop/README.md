@@ -19,7 +19,7 @@
 
 特に以下を確認：
 - Go 1.25以降がインストールされている
-- ログファイル（50個、約500MB）が生成済み
+- ログファイル（200個）が生成済み
 
 ##  ディレクトリ構成
 
@@ -68,9 +68,7 @@ go run ./workshop/phase3/main.go
 go run ./workshop/phase4/main.go
 ```
 
-
 Phase 3よりもさらに高速化する。あらゆる最適化手法を試してください。
-
 
 ---
 
@@ -81,17 +79,13 @@ Phase 3よりもさらに高速化する。あらゆる最適化手法を試し�
 - [solutions/phase1/main.go](../solutions/phase1/main.go) - 逐次処理版
 - [solutions/phase2/main.go](../solutions/phase2/main.go) - 基本並行処理版
 - [solutions/phase3/main.go](../solutions/phase3/main.go) - ワーカープール版
-- [solutions/phase4/main.go](../solutions/phase4/main.go) - さらなる高速化版
+- [solutions/phase4/main.go](../solutions/phase4/main.go) - さらなる最適化版
 
 **模範解答を見るタイミング:**
 1. 自分で実装を試してから
 2. ヒントを見ても解決できない場合
 3. 実装完了後、他のアプローチを確認したい場合
 
-**活用方法:**
-- 自分の実装と比較する
-- 異なるアプローチを学ぶ
-- コードの書き方やパターンを参考にする
 
 ---
 
