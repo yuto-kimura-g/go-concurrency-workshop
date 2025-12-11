@@ -6,9 +6,9 @@
 
 ### 基本的な流れ
 
-1. **workshop/ ディレクトリで実装** - Phase 1から順に実装
-2. **詰まったら docs/HINTS.md を参照** - ヒント集
-3. **solutions/ で答え合わせ** - 模範解答と比較
+1. workshop/ ディレクトリで実装
+2. 詰まったら docs/HINTS.md を参照
+3. solutions/ で答え合わせ
 
 
 ---
@@ -32,7 +32,7 @@ workshop/
 ├── phase3/
 │   └── main.go    # Phase 3: ワーカープール版を実装
 └── phase4/
-    └── main.go    # Phase 4: さらなる高速化に挑戦
+    └── main.go    # Phase 4: さらなる高速化
 ```
 
 
