@@ -14,7 +14,8 @@
 
 ##  ドキュメント
 
-- [workshop/README.md](workshop/README.md) - ワークショップ実施ガイド（各Phaseの詳細な説明）
+- [workshop/README.md](workshop/README.md) - **ワークショップ実施ガイド（各Phaseの詳細な説明）**
+- [docs/SLIDES.md](docs/SLIDES.md) - **スライド資料**
 - [docs/SETUP_CHECK.md](docs/SETUP_CHECK.md) - 環境構築方法とチェックリスト
 - [docs/HINTS.md](docs/HINTS.md) - 実装のヒント集
 
