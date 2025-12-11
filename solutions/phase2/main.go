@@ -55,18 +55,18 @@ func processFiles(root *os.Root, files []string) []*logparser.Result {
 	// 各ファイルに対してgoroutineを起動
 	for _, filename := range files {
 		wg.Add(1)
-		go func(name string) {
+		go func() {
 			defer wg.Done()
 
-			result, err := processFile(root, name)
+			result, err := processFile(root, filename)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", name, err)
+				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
 				return
 			}
 
 			// 結果をチャネルに送信
 			resultCh <- result
-		}(filename)
+		}()
 	}
 
 	// 全てのgoroutineが完了したらチャネルを閉じる
