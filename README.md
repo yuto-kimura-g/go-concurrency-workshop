@@ -22,7 +22,7 @@ cd go-concurrency-workshop
 ### 2. ログファイルを生成
 
 ```bash
-go run cmd/loggen/main.go
+make gen
 ```
 
 これで `logs/` ディレクトリに50個のログファイル（合計約500MB）が生成されます。
@@ -33,7 +33,7 @@ go run cmd/loggen/main.go
 
 ```bash
 # workshop/ で実装に挑戦
-go run ./workshop/phase1/main.go
+make w1
 
 ```
 
@@ -80,6 +80,15 @@ go-concurrency-workshop/
 
 ```bash
 go run cmd/loggen/main.go --files=100 --lines=50000
+```
+
+### 利用可能な Make コマンド
+
+```bash
+make help           # コマンド一覧を表示
+make gen            # ログファイルを生成
+make w1 w2 w3 w4    # Workshop Phase 1-4 を実行
+make s1 s2 s3 s4    # Solution Phase 1-4 を実行
 ```
 
 ##  ライセンス

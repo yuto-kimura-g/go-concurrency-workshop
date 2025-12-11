@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,7 +41,9 @@ func main() {
 	numWorkers := runtime.NumCPU()
 	results := processFiles(logRoot, files, numWorkers)
 
-	printResults(results, time.Since(startTime))
+	elapsed := time.Since(startTime)
+	printResults(results, elapsed)
+	recordResult("phase4", elapsed)
 }
 
 // processFiles は最適化されたワーカープールパターンでファイルを処理します
@@ -173,4 +177,79 @@ func findLogDir() string {
 		return "../../logs"
 	}
 	return "./logs"
+}
+
+// recordResult は実行時間をsolutions/results.txtに記録します
+func recordResult(phase string, elapsed time.Duration) {
+	const resultsPath = "./solutions/results.txt"
+
+	// 既存の結果を読み込む（なければ空のマップ）
+	results := loadResults(resultsPath)
+
+	// 現在のフェーズの結果を更新（冪等操作）
+	results[phase] = elapsed.Seconds()
+
+	// ファイルに書き戻す（全体を上書き）
+	if err := saveResults(resultsPath, results); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to save results: %v\n", err)
+	}
+}
+
+// loadResults はresults.txtを読み込む（ファイルがなければ空のマップ）
+func loadResults(path string) map[string]float64 {
+	results := make(map[string]float64)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return results // ファイルがなければ空
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		if line = strings.TrimSpace(line); line == "" {
+			continue
+		}
+		// "phase1=10.00" or "phase2=2.00 (phase1から5.00倍高速, 80.0%改善)" の形式をパース
+		parts := strings.Split(line, "=")
+		if len(parts) == 2 {
+			// スペースで分割して数値部分だけを取得
+			fields := strings.Fields(parts[1])
+			if len(fields) > 0 {
+				if val, err := strconv.ParseFloat(fields[0], 64); err == nil {
+					results[parts[0]] = val
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+// saveResults は結果をresults.txtに保存（冪等）
+func saveResults(path string, results map[string]float64) error {
+	var lines []string
+
+	// Phase 1の基準値を取得
+	baseline, hasBaseline := results["phase1"]
+
+	// 安定したソート順（phase1, phase2, phase3...）
+	for _, phase := range []string{"phase1", "phase2", "phase3", "phase4"} {
+		if val, ok := results[phase]; ok {
+			line := fmt.Sprintf("%s=%.2f", phase, val)
+
+			// Phase 1以外で基準値があれば改善率を追加
+			if phase != "phase1" && hasBaseline && baseline > 0 {
+				improvement := (baseline - val) / baseline * 100
+				speedup := baseline / val
+				line += fmt.Sprintf(" (phase1から%.2f倍高速, %.1f%%改善)", speedup, improvement)
+			}
+
+			lines = append(lines, line)
+		}
+	}
+
+	content := strings.Join(lines, "\n")
+	if len(content) > 0 {
+		content += "\n"
+	}
+	return os.WriteFile(path, []byte(content), 0644)
 }

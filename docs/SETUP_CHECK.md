@@ -42,7 +42,7 @@ cd go-concurrency-workshop
 ### 3.1 ログ生成ツールの実行
 
 ```bash
-go run cmd/loggen/main.go
+make gen
 ```
 
 **期待される出力例:**
