@@ -8,7 +8,6 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -26,15 +25,15 @@ type LogEntry struct {
 
 // Configuration for log generation
 type Config struct {
-	OutputDir string
-	FileCount int
+	OutputDir    string
+	FileCount    int
 	LinesPerFile int
-	Seed      uint64
-	Verbose   bool
+	Seed         uint64
+	Verbose      bool
 }
 
 var (
-	methods = []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+	methods       = []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
 	methodWeights = []int{70, 20, 5, 3, 2} // cumulative: GET=70%, POST=20%, etc.
 
 	paths = []string{
@@ -54,7 +53,7 @@ var (
 	}
 	pathWeights = []int{15, 10, 15, 10, 10, 5, 8, 3, 7, 5, 2, 5, 5}
 
-	statuses = []int{200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503}
+	statuses      = []int{200, 201, 204, 301, 302, 400, 401, 403, 404, 500, 502, 503}
 	statusWeights = []int{75, 5, 2, 1, 1, 3, 2, 1, 5, 3, 1, 1}
 )
 
@@ -70,8 +69,8 @@ func main() {
 func parseFlags() *Config {
 	cfg := &Config{}
 	flag.StringVar(&cfg.OutputDir, "output", "./logs", "Output directory for log files")
-	flag.IntVar(&cfg.FileCount, "files", 50, "Number of log files to generate")
-	flag.IntVar(&cfg.LinesPerFile, "lines", 67000, "Lines per file (approximately 10MB)")
+	flag.IntVar(&cfg.FileCount, "files", 200, "Number of log files to generate")
+	flag.IntVar(&cfg.LinesPerFile, "lines", 50000, "Lines per file")
 	flag.Uint64Var(&cfg.Seed, "seed", uint64(time.Now().UnixNano()), "Random seed for reproducibility")
 	flag.BoolVar(&cfg.Verbose, "verbose", false, "Show progress during generation")
 	flag.Parse()
@@ -79,12 +78,16 @@ func parseFlags() *Config {
 }
 
 func run(cfg *Config) error {
-	// Create output directory
 	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Initialize random generator
+	outputRoot, err := os.OpenRoot(cfg.OutputDir)
+	if err != nil {
+		return fmt.Errorf("failed to open output directory: %w", err)
+	}
+	defer outputRoot.Close()
+
 	rng := rand.New(rand.NewPCG(cfg.Seed, cfg.Seed))
 
 	fmt.Println("Generating log files...")
@@ -92,9 +95,9 @@ func run(cfg *Config) error {
 	totalSize := int64(0)
 
 	for i := 1; i <= cfg.FileCount; i++ {
-		filename := filepath.Join(cfg.OutputDir, fmt.Sprintf("access_%03d.log", i))
+		filename := fmt.Sprintf("access_%03d.json", i)
 
-		size, err := generateLogFile(filename, cfg.LinesPerFile, rng)
+		size, err := generateLogFile(outputRoot, filename, cfg.LinesPerFile, rng)
 		if err != nil {
 			return fmt.Errorf("failed to generate %s: %w", filename, err)
 		}
@@ -103,7 +106,7 @@ func run(cfg *Config) error {
 
 		if cfg.Verbose {
 			fmt.Printf("  [%d/%d] %s (%d lines, %.1fMB)\n",
-				i, cfg.FileCount, filepath.Base(filename), cfg.LinesPerFile, float64(size)/(1024*1024))
+				i, cfg.FileCount, filename, cfg.LinesPerFile, float64(size)/(1024*1024))
 		}
 	}
 
@@ -114,15 +117,15 @@ func run(cfg *Config) error {
 	return nil
 }
 
-func generateLogFile(filename string, lineCount int, rng *rand.Rand) (int64, error) {
-	file, err := os.Create(filename)
+func generateLogFile(root *os.Root, filename string, lineCount int, rng *rand.Rand) (int64, error) {
+	file, err := root.Create(filename)
 	if err != nil {
 		return 0, err
 	}
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	encoder.SetEscapeHTML(false) // Performance optimization
+	encoder.SetEscapeHTML(false)
 
 	for i := 0; i < lineCount; i++ {
 		entry := generateLogEntry(rng)
