@@ -46,7 +46,12 @@ func main() {
 // ============================================================
 // TODO: この関数を実装してください
 // ============================================================
-// HINT: goroutineとchannelを使って並行処理を実現します
+// HINT: channelとWaitGroupを使って並行処理を実現します
+// - 結果を送受信するchannel
+// - 全goroutineの完了を待つWaitGroup
+// - 各ファイルに対するgoroutine
+// - channelのclose処理
+// - channelから結果を受け取る
 func processFiles(root *os.Root, files []string) []*logparser.Result {
 	// まずは逐次処理版（Phase 1と同じ）
 	results := make([]*logparser.Result, 0, len(files))
