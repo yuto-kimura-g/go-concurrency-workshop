@@ -60,7 +60,7 @@ paginate: true
    - [close すると何が起きる?](#close-すると何が起きる)
    - [close を忘れるとどうなる?](#close-を忘れるとどうなる)
    - [バッファなし channel の動き](#バッファなし-channel-の動き)
-   - [バッファ付き channel の動き](#バッファ付き-channel-の動き)
+   - [バッファあり channel の動き](#バッファあり-channel-の動き)
    - [バッファあり/なし の使い分け](#バッファありなし-の使い分け)
    - [ワーカープールでバッファを使う理由](#ワーカープールでバッファを使う理由)
    - [ワーカープールのポイント](#ワーカープールのポイント)
@@ -97,7 +97,7 @@ paginate: true
    - [処理全体にタイムアウトをかける](#処理全体にタイムアウトをかける)
    - [パターン7: Semaphore](#パターン7-semaphore)
    - [Semaphore とは](#semaphore-とは)
-   - [バッファ付き channel で Semaphore](#バッファ付き-channel-で-semaphore)
+   - [バッファあり channel で Semaphore](#バッファあり-channel-で-semaphore)
    - [Semaphore の動き](#semaphore-の動き)
    - [ワーカープールとの違い](#ワーカープールとの違い)
    - [パターン8: Rate Limiting](#パターン8-rate-limiting)
@@ -351,7 +351,7 @@ for _, file := range files {
 wg.Wait()  // 全部終わるまで待つ
 ```
 
-200ファイルあれば理論上は 0→1→…→200→…→0 になるが、実際は Add と Done が並行で動くため途中で増減が混在する（200に到達する前に減り始めることもある）。重要なのは「Add と Done がペアになる」「最後に0へ戻る」こと。
+重要なのは「Add と Done がペアになる」「最後に0へ戻る」こと。
 
 ---
 
@@ -939,7 +939,7 @@ ch := make(chan int)  // バッファサイズ: 0(デフォルト)
 
 ---
 
-## バッファ付き channel の動き
+## バッファあり channel の動き
 
 ```go
 ch := make(chan int, 3)  // バッファサイズ: 3
@@ -1463,7 +1463,7 @@ func fetchWithTimeout(url string) (string, error) {
 
 ---
 
-## バッファ付き channel で Semaphore
+## バッファあり channel で Semaphore
 
 ```go
 // 同時に3つまで
@@ -1696,16 +1696,16 @@ defer cancel()  // 必ず呼ぶ
 ## 4つの Phase
 
 Phase 1 逐次処理
-　goroutineを使わずに、まず動くものを作る → 基準タイム
+　- goroutineを使わずに、まず動くものを作る。
 
 Phase 2 並行処理
-　goroutine + channel を使う。
+　-goroutine + channel を使う。
 
 Phase 3 ワーカープール
-　固定数のgoroutineで処理。(Go 1.25の WaitGroup.Go() を活用)
+　- 固定数のgoroutineで処理。(Go 1.25の WaitGroup.Go() を活用)
 
 Phase 4 さらなる高速化
-　制約なし
+　- 制約なし
 
  参考: [Go 1.25 Release Notes](https://go.dev/doc/go1.25) | [WaitGroup.Go - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup.Go)
 
