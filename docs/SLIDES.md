@@ -41,6 +41,7 @@ paginate: true
    - [受信時のブロック](#受信時のブロック)
    - [channel の種類によるブロックの違い](#channel-の種類によるブロックの違い)
    - [なぜブロックするのか](#なぜブロックするのか)
+   - [データ競合（データレース）とは](#データ競合データレースとは)
    - [結果を集める](#結果を集める)
    - [流れを図で見る](#流れを図で見る)
    - [このパターンのポイント](#このパターンのポイント)
@@ -594,6 +595,27 @@ channel は「値を渡すための待ち合わせ場所」。
 
 参考: [Go spec - Send/Receive](https://go.dev/ref/spec#Send_statements) | [Go Memory Model](https://go.dev/ref/mem) | [Effective Go - Share Memory By Communicating](https://go.dev/doc/effective_go#sharing) | [Go Blog - Pipelines](https://go.dev/blog/pipelines)
 
+---
+
+## データ競合（データレース）とは
+
+データ競合 (data race) は「複数の goroutine が同じ変数を同時に触る」ことで起きる。  
+（少なくとも片方が書き込みだと危ない）
+
+```go
+var x int
+go func() { x = 1 }()       // 書き込み
+go func() { fmt.Println(x) }() // 読み取り（0/1 どっちが出る？）
+```
+
+channel による値渡しにすると「同じメモリ」を共有しなくて済む。
+
+```go
+ch := make(chan int)
+
+go func() { ch <- 1 }() // 値を送る
+fmt.Println(<-ch)        // 値を受け取る（ここで同期も取れる）
+```
 
 ---
 
