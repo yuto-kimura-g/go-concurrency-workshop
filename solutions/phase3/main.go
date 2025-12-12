@@ -48,15 +48,9 @@ func main() {
 
 // processFiles はワーカープールパターンでファイルを処理します（Go 1.25のWaitGroup.Go()を使用）
 func processFiles(root *os.Root, files []string, numWorkers int) []*logparser.Result {
-	// ジョブ配布と結果収集のためのバッファ付きチャネルを作成
-	jobs := make(chan string, len(files))
-	results := make(chan *logparser.Result, len(files))
-
-	// 全てのファイルをjobsチャネルに送信
-	for _, filename := range files {
-		jobs <- filename
-	}
-	close(jobs) // これ以上ジョブが送信されないことを通知
+	// ジョブ配布と結果収集のためのチャネルを作成（filesが巨大でもメモリが増えないように小さめのバッファにする）
+	jobs := make(chan string, numWorkers)
+	results := make(chan *logparser.Result, numWorkers)
 
 	// ワーカー調整のためのWaitGroupを作成
 	var wg sync.WaitGroup
@@ -74,6 +68,14 @@ func processFiles(root *os.Root, files []string, numWorkers int) []*logparser.Re
 			}
 		})
 	}
+
+	// 全てのファイルをjobsチャネルに送信（ワーカー起動後に流し込む）
+	go func() {
+		defer close(jobs) // これ以上ジョブが送信されないことを通知
+		for _, filename := range files {
+			jobs <- filename
+		}
+	}()
 
 	// 全てのワーカーが完了したら結果チャネルを閉じる
 	go func() {
