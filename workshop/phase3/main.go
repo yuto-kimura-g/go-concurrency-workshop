@@ -37,7 +37,7 @@ func main() {
 		}
 	}
 
-	numWorkers := runtime.NumCPU()
+	numWorkers := runtime.GOMAXPROCS(0)
 	results := processFiles(logRoot, files, numWorkers)
 
 	elapsed := time.Since(startTime)

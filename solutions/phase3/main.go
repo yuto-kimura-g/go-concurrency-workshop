@@ -38,7 +38,8 @@ func main() {
 		}
 	}
 
-	numWorkers := runtime.NumCPU()
+	// ワーカー数の目安を「GOMAXPROCS (= P の数 )」にする
+	numWorkers := runtime.GOMAXPROCS(0)
 	results := processFiles(logRoot, files, numWorkers)
 
 	elapsed := time.Since(startTime)
