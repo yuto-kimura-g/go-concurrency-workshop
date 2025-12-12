@@ -1,5 +1,6 @@
 # Goで学ぶ並行処理ワークショップ
 
+[Go Workshop Conference 2025 IN KOBE](https://gwc.gocon.jp/2025/)の「[並行処理スピードアップコンテスト](https://go-workshop-conference.connpass.com/event/375456/)」用ワークショップリポジトリです。
 実務でよくある「大量のログファイルを急いで解析してほしい」という状況を題材に、Goの並行処理を学ぶハンズオンワークショップです。
 
 ## 1. 必要な環境
