@@ -771,7 +771,7 @@ goroutine は軽量だが、無制限に作ると問題が起きる
     - 残りは順番待ち(切り替えながら実行)
     - 切り替えの処理にもコストがかかる
 
-結論: goroutine の数を適切に制限した方が効率的
+結論: goroutine の数を適切に制限した方が効率的な可能性がある。
 
  参考: [Go runtime - HACKING.md (Scheduler/Stack)](https://go.dev/src/runtime/HACKING.md) | [What is a goroutine? And what is their size?](https://tpaschalis.me/goroutines-size/) | [How Many Goroutines Can Go Run?](https://leapcell.io/blog/how-many-goroutines-can-go-run)
 
@@ -938,6 +938,18 @@ ch := make(chan int)  // バッファサイズ: 0(デフォルト)
 3. 送信側が送ったら、値を受け取って次に進める
 
 
+```
+
+時間 →   t0          t1          t2
+
+送信側:  ch<-42      [待つ]      (再開)
+バッファ: []          []          []
+受信側:              <-ch(42)    (再開)
+
+```
+
+
+
 ---
 
 ## バッファあり channel の動き
@@ -957,6 +969,20 @@ ch := make(chan int, 3)  // バッファサイズ: 3
 1. 値を受け取ろうとする `<-ch`
 2. **バッファに値があれば**、すぐに受け取って次に進める ← **受信側も待たない**
 3. バッファが空なら、値が来るまで待つ(ブロック)
+
+
+```
+
+cap=3 の例
+
+時間 →   t0      t1      t2      t3      t4        t5
+
+送信側:  ch<-1   ch<-2   ch<-3   ch<-4   [待つ]    (再開)
+バッファ: []      [1]     [1 2]   [1 2 3] [1 2 3]  [2 3 4]
+受信側:                           <-ch(1)          <-ch(2)
+
+```
+
 
 
 ---
@@ -1001,7 +1027,7 @@ results := make(chan Result, len(files))   // バッファあり
 
 ## ワーカープールのポイント
 
-- 固定数のワーカーを先に起動(CPU コア数など)
+- 固定数のワーカーを先に起動
 - jobs channel から仕事を取り出して処理
 - `close(jobs)` でワーカーに「もう仕事はない」と伝える
 - 同時実行数をコントロールできる
