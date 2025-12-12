@@ -111,6 +111,14 @@ paginate: true
    - [context の伝播](#context-の伝播)
    - [context を使うべき場面](#context-を使うべき場面)
    - [context 使用時の注意](#context-使用時の注意)
+   - [パターン10: errgroup](#パターン10-errgroup)
+   - [errgroup とは](#errgroup-とは)
+   - [errgroup の基本例](#errgroup-の基本例)
+   - [errgroup.WithContext（キャンセル伝播）](#errgroupwithcontextキャンセル伝播)
+   - [errgroup で同時実行数を制限する](#errgroup-で同時実行数を制限する)
+   - [パターン11: sync.Mutex](#パターン11-syncmutex)
+   - [sync.Mutex とは](#syncmutex-とは)
+   - [Mutex を使うべき場面 / 避けたい場面](#mutex-を使うべき場面--避けたい場面)
    - [やりたいこととパターンの対応](#やりたいこととパターンの対応)
 6. [ハンズオン](#ハンズオン)
    - [4つの Phase](#4つの-phase)
@@ -182,9 +190,9 @@ CPUは暇な時間が多い。ファイルI/Oの待ち時間がもったいな�
 
 ## 並行と並列は異なる
 
-- 並行(concurrency): 「同時に進んでいるように見せる」。1コアでもタスク切替で複数の仕事を前に進める。  
+- **並行(concurrency)**: 「同時に進んでいるように見せる」。1コアでもタスク切替で複数の仕事を前に進める。  
   “Concurrency is about dealing with lots of things at once.” — Rob Pike, 2012
-- 並列(parallelism): 「物理的に同時に走る」。複数コア/CPU上で本当に同時実行する。  
+- **並列(parallelism)**: 「物理的に同時に走る」。複数コア/CPU上で本当に同時実行する。  
   “Parallelism is about doing lots of things at once.” — Rob Pike, 2012
 
 
@@ -1050,6 +1058,11 @@ for num := range generateNumbers(10) {
 - 呼び出し側は for range で受け取るだけ
 - 生成側と消費側が疎結合になる
 
+- 生成側は送信が終わったら channel を `close` する（`for range` が終了できるように）
+- 受信側が途中で読むのをやめる可能性があるなら、キャンセル（Done channel / `context.Context`）も併用する
+
+ 参考: [Go Spec - For statements (range)](https://go.dev/ref/spec#For_statements) | [Go Blog - Pipelines (and cancellation)](https://go.dev/blog/pipelines) | [Go builtin: close](https://pkg.go.dev/builtin#close)
+
 ---
 
 ## Generator の応用例
@@ -1072,6 +1085,8 @@ func readLines(filename string) <-chan string {
 ```
 
 巨大なファイルでもメモリを食わない。必要な分だけ読める。
+
+※例ではエラー処理（`os.Open` / `scanner.Err()`）を省略
 
 ---
 
@@ -1153,6 +1168,12 @@ for n := range quadrupled {
 - 再利用性: ステージを組み替えて別のパイプラインを作れる
 - 並行性: 各ステージが同時に動く(Stage1が次を出力している間にStage2が処理)
 
+
+- 下流が途中で受信を止めると、上流が `send` でブロックして goroutine リークになり得る → キャンセル（Done channel / `context.Context`）を組み込む
+- 各ステージは「入力を読み切ってから出力 channel を close」する責務を持つ
+
+ 参考: [Go Blog - Pipelines (and cancellation)](https://go.dev/blog/pipelines)
+
 ---
 
 ## パターン3: Fan-out / Fan-in
@@ -1194,6 +1215,10 @@ for _, job := range allJobs {
 ```
 
 これは実はワーカープールと同じ。
+
+ワーカー側が `for range jobs` で抜けられるように、投入側が `close(jobs)` するのが基本
+
+ 参考: [Go by Example: Worker Pools](https://gobyexample.com/worker-pools) | [Go builtin: close](https://pkg.go.dev/builtin#close) | [Go Blog - Pipelines (and cancellation)](https://go.dev/blog/pipelines)
 
 ---
 
@@ -1254,6 +1279,8 @@ for n := range merged {
 ```
 
 注意: 出力の順序は保証されない(先に来たものから出る)
+
+ 参考: [Go Blog - Pipelines (and cancellation)](https://go.dev/blog/pipelines) | [sync.WaitGroup - pkg.go.dev](https://pkg.go.dev/sync#WaitGroup)
 
 ---
 
@@ -1333,22 +1360,33 @@ go func() {
 ## Done Channel パターン
 
 ```go
-done := make(chan struct{})  
-go func() {
+func worker(done <-chan struct{}, jobs <-chan Job) {
     for {
         select {
         case <-done:
             fmt.Println("キャンセルされた")
             return
-        default:
-            // 通常処理
+        case job, ok := <-jobs:
+            if !ok {
+                return
+            }
+            process(job)
         }
     }
-}()
+}
+
+done := make(chan struct{})
+jobs := make(chan Job)
+go worker(done, jobs)
 
 // キャンセルしたいとき
 close(done)
 ```
+
+- `close(done)` は **1箇所だけ**で行う（複数箇所から close すると panic）
+- `select` に `default` を入れるとブロックしないため、条件によっては busy loop になる（意図がない限り避ける）
+
+ 参考: [Go builtin: close](https://pkg.go.dev/builtin#close) | [Go Spec - Select statements](https://go.dev/ref/spec#Select_statements) | [Effective Go - Select](https://go.dev/doc/effective_go#select)
 
 ---
 
@@ -1365,6 +1403,8 @@ done := make(chan struct{})
 ```go
 close(done)  // 全ての <-done が解除される
 ```
+
+ 参考: [Go builtin: close](https://pkg.go.dev/builtin#close) | [Go Blog - Pipelines (and cancellation)](https://go.dev/blog/pipelines)
 
 ---
 
@@ -1419,13 +1459,18 @@ case <-time.After(3 * time.Second):
 
 `time.After(d)` は、時間 d が経過すると値を送る channel を返す。
 
+- 1回きりのタイムアウトなら `time.After` でOK
+- ループ内で繰り返し使う場合は `time.NewTimer` / `Reset` を検討（不要なタイマー生成を避ける）
+
+ 参考: [time.After - pkg.go.dev](https://pkg.go.dev/time#After) | [time.NewTimer - pkg.go.dev](https://pkg.go.dev/time#NewTimer)
+
 ---
 
 ## 処理全体にタイムアウトをかける
 
 ```go
 func fetchWithTimeout(url string) (string, error) {
-    result := make(chan string)
+    result := make(chan string, 1)
 
     go func() {
         // 時間のかかる処理
@@ -1441,6 +1486,11 @@ func fetchWithTimeout(url string) (string, error) {
     }
 }
 ```
+
+ `result` がバッファなしだと、タイムアウト後に `result <- body` が詰まって goroutine リークになり得る（例ではバッファ 1 にして回避）
+
+
+ 参考: [context.WithTimeout - pkg.go.dev](https://pkg.go.dev/context#WithTimeout) | [Go blog - Context](https://go.dev/blog/context)
 
 ---
 
@@ -1471,6 +1521,10 @@ for _, task := range tasks {
     }(task)
 }
 ```
+
+同時実行数の制御は channel でもできるが、semaphore `golang.org/x/sync/semaphore`もある
+
+ 参考: [golang.org/x/sync/semaphore - pkg.go.dev](https://pkg.go.dev/golang.org/x/sync/semaphore)
 
 ---
 
@@ -1533,6 +1587,10 @@ for _, req := range requests {
 
 `time.Tick(d)` は、一定間隔で値を送り続ける channel を返す。
 
+補足: `time.Tick` は停止できないため、止めたい可能性がある場合は `time.NewTicker` + `Stop()` を使う
+
+ 参考: [time.Tick - pkg.go.dev](https://pkg.go.dev/time#Tick) | [time.NewTicker - pkg.go.dev](https://pkg.go.dev/time#NewTicker) | [Go by Example: Rate Limiting](https://gobyexample.com/rate-limiting)
+
 ---
 
 ## バースト対応の Rate Limiting
@@ -1566,6 +1624,10 @@ for _, req := range requests {
 ```
 
 最初の3個は即座に処理され、4個目以降は 200ms 間隔になる。
+
+トークンバケットの `golang.org/x/time/rate` を使うと、待機/拒否/バースト制御をまとめて扱える
+
+ 参考: [golang.org/x/time/rate - pkg.go.dev](https://pkg.go.dev/golang.org/x/time/rate)
 
 ---
 
@@ -1602,14 +1664,17 @@ ctx, cancel := context.WithDeadline(context.Background(), deadline)
 ## context を使ったキャンセル
 
 ```go
-func worker(ctx context.Context) {
+func worker(ctx context.Context, jobs <-chan Job) {
     for {
         select {
         case <-ctx.Done():
             fmt.Println("キャンセル:", ctx.Err())
             return
-        default:
-            // 作業
+        case job, ok := <-jobs:
+            if !ok {
+                return
+            }
+            process(job)
         }
     }
 }
@@ -1637,7 +1702,7 @@ func fetchData(ctx context.Context) (Data, error) {
 }
 ```
 
-慣習: context は関数の第1引数に渡す。
+context は関数の第1引数に渡すことが多い。
 
 ---
 
@@ -1665,6 +1730,135 @@ defer cancel()  // 必ず呼ぶ
 
 ---
 
+## パターン10: errgroup
+
+---
+
+## errgroup とは
+
+複数 goroutine を「グループ」として起動し、最初に発生したエラーを回収するパターン。
+
+- `Wait()` が全ての終了を待ち、最初の非 nil error を返す
+- `errgroup.WithContext` を使うと、エラー発生時に `ctx` でキャンセルを伝播できる
+
+ 参考: [golang.org/x/sync/errgroup - pkg.go.dev](https://pkg.go.dev/golang.org/x/sync/errgroup)
+
+---
+
+## errgroup の基本例
+
+```go
+var g errgroup.Group
+
+for _, url := range urls {
+    url := url
+    g.Go(func() error {
+        return fetch(url) // 失敗したら error を返す
+    })
+}
+
+if err := g.Wait(); err != nil {
+    return err
+}
+```
+
+---
+
+## errgroup.WithContext（キャンセル伝播）
+
+```go
+g, ctx := errgroup.WithContext(context.Background())
+
+for _, url := range urls {
+    url := url
+    g.Go(func() error {
+        // fetch が ctx を受け取れるなら渡す
+        return fetchWithCtx(ctx, url)
+    })
+}
+
+if err := g.Wait(); err != nil {
+    return err
+}
+```
+
+ポイント
+- `WithContext` の戻り `ctx` は「最初のエラー」または「Wait 完了」でキャンセルされる
+- 下流の処理が `ctx` を監視していないと、キャンセルしても止まらない（I/O は `ctx` を渡せるAPIを使う）
+
+ 参考: [golang.org/x/sync/errgroup - pkg.go.dev](https://pkg.go.dev/golang.org/x/sync/errgroup) | [context package - pkg.go.dev](https://pkg.go.dev/context)
+
+---
+
+## errgroup で同時実行数を制限する
+
+```go
+g, ctx := errgroup.WithContext(context.Background())
+_ = ctx
+
+g.SetLimit(10) // 最大10並列
+
+for _, job := range jobs {
+    job := job
+    g.Go(func() error {
+        return process(job)
+    })
+}
+
+if err := g.Wait(); err != nil {
+    return err
+}
+```
+
+注意: `SetLimit` は「goroutine が動いている間に変更しない」
+
+ 参考: [golang.org/x/sync/errgroup - pkg.go.dev](https://pkg.go.dev/golang.org/x/sync/errgroup)
+
+---
+
+## パターン11: sync.Mutex
+
+---
+
+## sync.Mutex とは
+
+共有メモリ（共有の map / slice / struct など）を複数 goroutine から安全に更新するための排他ロック。
+
+```go
+type Counter struct {
+    mu sync.Mutex
+    n  int
+}
+
+func (c *Counter) Inc() {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.n++
+}
+```
+
+ポイント
+- `defer Unlock()` を使うと unlock 忘れを防げる
+- `Mutex` は **初回使用後にコピーしてはいけない**
+
+ 参考: [sync.Mutex - pkg.go.dev](https://pkg.go.dev/sync#Mutex) | [Go Memory Model](https://go.dev/ref/mem)
+
+---
+
+## Mutex を使うべき場面 / 避けたい場面
+
+使うべき場面:
+- 複数 goroutine から「同じデータ構造」を読み書きする（例: map の集計、キャッシュ）
+
+避けたい/注意:
+- channel のやり取りだけで表現できるなら、まずは channel を検討（責務分離しやすい）
+- ロック範囲が広いと並行性が落ちる（クリティカルセクションを小さく）
+- 複数ロックを取る場合は順序を統一しないとデッドロックの原因になる
+
+ 参考: [Effective Go - Share Memory By Communicating](https://go.dev/doc/effective_go#sharing) | [sync.Mutex - pkg.go.dev](https://pkg.go.dev/sync#Mutex)
+
+---
+
 ## やりたいこととパターンの対応
 
 | やりたいこと | パターン |
@@ -1676,8 +1870,10 @@ defer cancel()  // 必ず呼ぶ
 | 複数 channel を待つ | select |
 | 処理をキャンセル | Done channel / context |
 | 時間制限を設ける | Timeout / context |
-| 同時実行数を制限 | Semaphore / Worker Pool |
+| 同時実行数を制限 | Semaphore / Worker Pool / errgroup.SetLimit |
 | リクエスト頻度を制限 | Rate Limiting |
+| エラーを集約して待つ | errgroup |
+| 共有メモリを保護 | sync.Mutex |
 
 
 ---
@@ -1717,6 +1913,7 @@ Phase 4 さらなる高速化
 - Go Concurrency Patterns: https://ggbaker.ca/prog-langs/content/go-concurrency.html
 - A Tour of Go - Goroutines: https://go.dev/tour/concurrency/1
 - Go Spec - Go statements: https://go.dev/ref/spec#Go_statements
+- Go Spec - For statements (range): https://go.dev/ref/spec#For_statements
 - Effective Go - Goroutines: https://go.dev/doc/effective_go#goroutines
 - What is a goroutine? (size): https://tpaschalis.me/goroutines-size/
 - Cloudflare: How Stacks are Handled in Go: https://blog.cloudflare.com/how-stacks-are-handled-in-go/
@@ -1735,6 +1932,7 @@ Phase 4 さらなる高速化
 - Go Blog - Pipelines (and cancellation): https://go.dev/blog/pipelines
 - How Many Goroutines Can Go Run?: https://leapcell.io/blog/how-many-goroutines-can-go-run
 - Go by Example: Worker Pools: https://gobyexample.com/worker-pools
+- Go by Example: Rate Limiting: https://gobyexample.com/rate-limiting
 - Go builtin: close: https://pkg.go.dev/builtin#close
 - Go by Example: Closing Channels: https://gobyexample.com/closing-channels
 - Gist of Go: Channels: https://antonz.org/go-concurrency/channels/
@@ -1743,4 +1941,14 @@ Phase 4 さらなる高速化
 - Go Spec - Select statements: https://go.dev/ref/spec#Select_statements
 - Effective Go - Select: https://go.dev/doc/effective_go#select
 - context package - pkg.go.dev: https://pkg.go.dev/context
+- context.WithTimeout - pkg.go.dev: https://pkg.go.dev/context#WithTimeout
 - Go blog - Context: https://go.dev/blog/context
+- time package - pkg.go.dev: https://pkg.go.dev/time
+- time.After - pkg.go.dev: https://pkg.go.dev/time#After
+- time.NewTimer - pkg.go.dev: https://pkg.go.dev/time#NewTimer
+- time.Tick - pkg.go.dev: https://pkg.go.dev/time#Tick
+- time.NewTicker - pkg.go.dev: https://pkg.go.dev/time#NewTicker
+- golang.org/x/sync/errgroup - pkg.go.dev: https://pkg.go.dev/golang.org/x/sync/errgroup
+- golang.org/x/sync/semaphore - pkg.go.dev: https://pkg.go.dev/golang.org/x/sync/semaphore
+- golang.org/x/time/rate - pkg.go.dev: https://pkg.go.dev/golang.org/x/time/rate
+- sync.Mutex - pkg.go.dev: https://pkg.go.dev/sync#Mutex
