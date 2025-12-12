@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"math"
 	"math/rand/v2"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -83,26 +84,33 @@ func run(cfg *Config) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Clean up existing log files before generating new ones
-	pattern := filepath.Join(cfg.OutputDir, "*.json")
-	existingFiles, err := filepath.Glob(pattern)
-	if err != nil {
-		return fmt.Errorf("failed to search for existing files: %w", err)
-	}
-	for _, file := range existingFiles {
-		if err := os.Remove(file); err != nil {
-			return fmt.Errorf("failed to remove existing file %s: %w", file, err)
-		}
-	}
-	if len(existingFiles) > 0 {
-		fmt.Printf("Cleaned up %d existing log file(s)\n", len(existingFiles))
-	}
-
 	outputRoot, err := os.OpenRoot(cfg.OutputDir)
 	if err != nil {
 		return fmt.Errorf("failed to open output directory: %w", err)
 	}
 	defer outputRoot.Close()
+
+	// Clean up existing log files before generating new ones
+	entries, err := fs.ReadDir(outputRoot.FS(), ".")
+	if err != nil {
+		return fmt.Errorf("failed to read output directory: %w", err)
+	}
+	cleaned := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".json") {
+			if err := outputRoot.Remove(name); err != nil {
+				return fmt.Errorf("failed to remove existing file %s: %w", name, err)
+			}
+			cleaned++
+		}
+	}
+	if cleaned > 0 {
+		fmt.Printf("Cleaned up %d existing log file(s)\n", cleaned)
+	}
 
 	rng := rand.New(rand.NewPCG(cfg.Seed, cfg.Seed))
 
