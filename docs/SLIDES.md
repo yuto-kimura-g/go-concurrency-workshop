@@ -238,27 +238,14 @@ go processFile("access_001.json")
 
 ---
 
-## 何が起きているのか
-
-```go
-func main() {
-    go processFile("file1.json")  // ①
-    go processFile("file2.json")  // ②
-    fmt.Println("done")          // ③
-}
-```
-
-①と②は「処理を開始しろ」という指示を出すだけ。
-実際の処理完了を待たずに、すぐ③に進む。
-
----
-
 ## goroutine が軽い理由
 
-- goroutine のスタックは数KBから開始し、必要に応じて伸縮する
-- 数千〜数万個でも問題なく動く
+- goroutine のスタックは数KBから開始し、必要に応じて伸縮する（必要ならコピーして拡張する）
+- goroutine は OSスレッドを1つ占有しない（Goランタイムが goroutine(G) を OSスレッド(M) 上に複数実行する）
+- 同時に走れる数は `GOMAXPROCS` 個の「実行権(P)」で制御され、Pを持つMだけがGoコードを実行できる（= 少数のOSスレッドで多数のgoroutineを回せる）
+- そのため、OSスレッドを大量に作るよりオーバーヘッドが小さく、数千〜数万個でも現実的に扱える（ただしメモリと仕事量次第）
 
- 参考: [What is a goroutine? And what is their size?](https://tpaschalis.me/goroutines-size/) | [Cloudflare: How Stacks are Handled in Go](https://blog.cloudflare.com/how-stacks-are-handled-in-go/)
+ 参考: [What is a goroutine? And what is their size?](https://tpaschalis.me/goroutines-size/) | [Cloudflare: How Stacks are Handled in Go](https://blog.cloudflare.com/how-stacks-are-handled-in-go/) | [Go runtime - HACKING.md (Scheduler: G/M/P)](https://go.dev/src/runtime/HACKING.md)
 
 ---
 
@@ -369,7 +356,8 @@ go func() {
 }()
 ```
 
-`defer` は「この関数を抜ける直前に（正常終了でも panic でも）登録した呼び出しを実行する」キーワード。引数の評価は `defer` を書いた時点で行われる。
+`defer` は「この関数を抜ける直前に（正常終了でも panic でも）登録した呼び出しを実行する」キーワード。
+引数の評価は `defer` を書いた時点で行われる。
 
 processFile でエラーが起きても、Done() は必ず呼ばれる。
 カウンタが減らないまま残る事故を防げる。
@@ -545,7 +533,7 @@ go func() {
 }()
 ```
 
-goroutine は止まっているが、プログラム全体は動いている
+goroutine は止まっているが、プログラム全体は動いている。
 
 ---
 
@@ -575,7 +563,8 @@ func main() {
 - バッファなし: cap=0。送信と受信が揃うまで進まない。
 - バッファあり: cap>0。送信は空きがあれば即進み、満杯なら待つ。受信は値があれば即進み、空なら待つ。
 - nil channel: 初期化されていない。送受信は永遠にブロック。
-- close 済み: 送信は panic。受信は「バッファ/キューに残る値を全て読み終えた後」は即ゼロ値・ok=false を返し、`for range ch` もそこで終わる。
+- close 済み: 送信は panic（`send on closed channel`）。
+  受信は「残っている値があればそれを返す」。残りを読み切った後は「ゼロ値」と `ok=false` を返し、`for range ch` もそこで終了する。
 
 ```go
 // バッファなし channel
@@ -655,7 +644,7 @@ goroutine1    [処理] → results に送信
 goroutine2    [処理] → results に送信
 goroutine3    [処理] → results に送信
 
-main          results から len(files) 回受信して集計
+main          results から len(files) 回受信する。
 ```
 
 送った数と受け取る数を合わせるのがポイント。
@@ -668,7 +657,7 @@ main          results から len(files) 回受信して集計
 - main 側で必要な回数だけ受信する。
 - 送信回数と受信回数を一致させる(これ重要)
 
-今日の Phase 2 はこれを使う
+今日の Phase 2 はこれを使う!
 
 ---
 
@@ -763,7 +752,7 @@ for _, file := range files {
 goroutine は軽量だが、無制限に作ると問題が起きる
 
 - メモリ消費
-    - 1個あたり約2.7KB使う(最初は2KBだが、実際は少し増える)
+    - 初期スタックは数KBから開始（Goランタイムが必要に応じて伸縮）
     - 大量に作ると、メモリが足りなくなる可能性
 
 
@@ -771,13 +760,15 @@ goroutine は軽量だが、無制限に作ると問題が起きる
     - OS には「一度に開けるファイル数」の制限がある
 
 - CPU で同時に動けるのは限られている
-    - 8コアのマシンで5000個の goroutine を起動しても実際に CPU 上で同時に実行されるのは最大8個だけ
+    - 上限があるのは「goroutine の総数」ではなく「同時に走れる数」
+    - 同時に Go コードを実行できる goroutine 数の上限は `GOMAXPROCS`（= 実行プロセッサ(P)の数）
+      - 例: `GOMAXPROCS=8` なら、5000個起動しても同時に走れるのは最大8個（残りは待機/順番待ち）
     - 残りは順番待ち(切り替えながら実行)
     - 切り替えの処理にもコストがかかる
 
 結論: goroutine の数を適切に制限した方が効率的
 
- 参考: [What is a goroutine? And what is their size?](https://tpaschalis.me/goroutines-size/) | [How Many Goroutines Can Go Run?](https://leapcell.io/blog/how-many-goroutines-can-go-run)
+ 参考: [Go runtime - HACKING.md (Scheduler/Stack)](https://go.dev/src/runtime/HACKING.md) | [What is a goroutine? And what is their size?](https://tpaschalis.me/goroutines-size/) | [How Many Goroutines Can Go Run?](https://leapcell.io/blog/how-many-goroutines-can-go-run)
 
 ---
 
@@ -798,7 +789,7 @@ goroutine は軽量だが、無制限に作ると問題が起きる
          results channel
 ```
 
-- 5000ファイルでも、ワーカーは8個だけ(CPU コア数分)
+- 5000ファイルでも、ワーカー数は `GOMAXPROCS`（CPU並列度）を目安に固定する
 - 各ワーカーは jobs から順番に仕事を取る
 - 全員が同じ jobs channel を見ている
 
@@ -1915,6 +1906,7 @@ Phase 4 さらなる高速化
 - Effective Go - Goroutines: https://go.dev/doc/effective_go#goroutines
 - What is a goroutine? (size): https://tpaschalis.me/goroutines-size/
 - Cloudflare: How Stacks are Handled in Go: https://blog.cloudflare.com/how-stacks-are-handled-in-go/
+- Go runtime - HACKING.md (Scheduler: G/M/P): https://go.dev/src/runtime/HACKING.md
 - sync.WaitGroup - pkg.go.dev: https://pkg.go.dev/sync#WaitGroup
 - WaitGroup.Go - pkg.go.dev: https://pkg.go.dev/sync#WaitGroup.Go
 - Go Blog - Defer, Panic, and Recover: https://go.dev/blog/defer-panic-and-recover
