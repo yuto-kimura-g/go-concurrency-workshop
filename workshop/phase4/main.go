@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nnnkkk7/go-concurrency-workshop/pkg/logparser"
@@ -59,7 +61,42 @@ func main() {
 
 func processFiles(root *os.Root, files []string) []*logparser.Result {
 	// TODO: ここに実装を書いてください
-	return nil
+	numWorkers := runtime.GOMAXPROCS(0)
+	jobQue := make(chan string, len(files))
+	results := make([]*logparser.Result, 0, len(files))
+	ch := make(chan *logparser.Result, len(files))
+	var wg sync.WaitGroup
+
+	// workerを起動
+	for range numWorkers {
+		wg.Go(func() {
+			// どのworker wがどのjobを取るかは知らないが、空いたworkerがjobQueから１つ取って処理する
+			// worker wが処理している間、w以外のworkerの中のjobループでもjobQueから取って処理される
+			// jobQueから取って処理するので、重複処理は行われない
+			for filename := range jobQue {
+				result, err := processFile(root, filename)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
+					return
+				}
+				ch <- result
+			}
+		})
+	}
+
+	// workerにjobを投げる
+	for _, filename := range files {
+		jobQue <- filename
+	}
+	close(jobQue)
+
+	wg.Wait()
+	close(ch)
+
+	for result := range ch {
+		results = append(results, result)
+	}
+	return results
 }
 
 func processFile(root *os.Root, filename string) (*logparser.Result, error) {

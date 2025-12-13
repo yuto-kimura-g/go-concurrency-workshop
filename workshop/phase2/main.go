@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nnnkkk7/go-concurrency-workshop/pkg/logparser"
@@ -55,16 +56,31 @@ func main() {
 func processFiles(root *os.Root, files []string) []*logparser.Result {
 	// まずは逐次処理版（Phase 1と同じ）
 	results := make([]*logparser.Result, 0, len(files))
+	ch := make(chan *logparser.Result, len(files))
+	var wg sync.WaitGroup
 	for _, filename := range files {
-		result, err := processFile(root, filename)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
-			continue
-		}
+		wg.Go(func() {
+			result, err := processFile(root, filename)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
+				return
+			}
+			ch <- result
+		})
+	}
+	// waitしなくても動く ???
+	// defer close(ch)
+	// for range len(files) {
+	// 	result := <-ch
+	// 	results = append(results, result)
+	// }
+	// どっちでも動くが、こっちのほうが良いらしい
+	wg.Wait()
+	close(ch)
+	for result := range ch {
 		results = append(results, result)
 	}
 	return results
-
 	// TODO: 上記の逐次処理を並行処理に書き換えてください
 }
 

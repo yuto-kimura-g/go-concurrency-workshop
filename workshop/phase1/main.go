@@ -49,7 +49,16 @@ func main() {
 // HINT: シンプルなfor文で各ファイルを順番に処理します
 func processFiles(root *os.Root, files []string) []*logparser.Result {
 	// TODO: ここに実装を書いてください
-	return nil
+	results := make([]*logparser.Result, len(files))
+	for i, file := range files {
+		res, err := processFile(root, file)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error process file: %v\n", err)
+			return nil
+		}
+		results[i] = res
+	}
+	return results
 }
 
 // ============================================================

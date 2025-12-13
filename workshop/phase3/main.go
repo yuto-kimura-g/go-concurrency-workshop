@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nnnkkk7/go-concurrency-workshop/pkg/logparser"
@@ -57,18 +58,51 @@ func main() {
 // - ジョブのchannel投入とclose
 // - 結果のchannel受信
 func processFiles(root *os.Root, files []string, numWorkers int) []*logparser.Result {
-	// まずは逐次処理版（Phase 1と同じ）
+	jobQue := make(chan string, len(files))
 	results := make([]*logparser.Result, 0, len(files))
+	ch := make(chan *logparser.Result, len(files))
+	var wg sync.WaitGroup
+
+	// workerを起動
+	for w := 0; w < numWorkers; w++ {
+		wg.Go(func() {
+			// どのworker wがどのjobを取るかは知らないが、空いたworkerがjobQueから１つ取って処理する
+			// worker wが処理している間、w以外のworkerの中のjobループでもjobQueから取って処理される
+			// jobQueから取って処理するので、重複処理は行われない
+			for filename := range jobQue {
+				result, err := processFile(root, filename)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
+					return
+				}
+				ch <- result
+			}
+		})
+	}
+
+	// workerにjobを投げる
 	for _, filename := range files {
-		result, err := processFile(root, filename)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
-			continue
-		}
+		jobQue <- filename
+	}
+	close(jobQue)
+
+	wg.Wait()
+
+	// この行に到達した時点で、for w ... ループのjobQueから全部取り出されて
+	// ch <- resultがすべて終わっている
+	// (それをwg.Wait()で待った)
+	// なので、それ以降に close(ch)しないとダメ
+
+	close(ch)
+
+	// for range len(files) {
+	// 	result := <-ch
+	// 	results = append(results, result)
+	// }
+	for result := range ch {
 		results = append(results, result)
 	}
 	return results
-
 	// TODO: 上記の逐次処理をワーカープールパターンに書き換えてください
 }
 
