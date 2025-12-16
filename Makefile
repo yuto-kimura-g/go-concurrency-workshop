@@ -34,7 +34,8 @@ w3:
 	go run ./workshop/phase3/main.go
 
 w4:
-	go run ./workshop/phase4/main.go
+	GOEXPERIMENT=jsonv2 go run ./workshop/phase4/main.go
+# 	go run ./workshop/phase4/main.go
 
 # Solution Phases
 s1:
