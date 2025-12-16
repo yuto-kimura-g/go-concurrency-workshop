@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,15 @@ import (
 
 func main() {
 	startTime := time.Now()
+
+	f, err := os.Create("cpu.prof")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating CPU profile file: %v\n", err)
+		os.Exit(1)
+	}
+	defer f.Close()
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	logRoot, err := os.OpenRoot("./logs")
 	if err != nil {

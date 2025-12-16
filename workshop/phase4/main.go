@@ -1,8 +1,12 @@
 package main
 
 import (
-	"encoding/json"
+	// "encoding/json"
+	jsontext "encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
+
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"runtime"
@@ -112,15 +116,39 @@ func processFile(root *os.Root, filename string) (*logparser.Result, error) {
 		StatusCounts: make(map[int]int),
 	}
 
-	decoder := json.NewDecoder(file)
-	for decoder.More() {
+	// profilingしてみると encoding/json が遅そうだったので、v2に変えてみる
+	// 使い方はよくわからなかったのでAIに投げた（ので、使い方が微妙な可能性はある）
+
+	// encoding/json/v2
+	dec := jsontext.NewDecoder(file)
+	for {
+		if err := dec.SkipValue(); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
 		var entry logparser.LogEntry
-		if err := decoder.Decode(&entry); err != nil {
+		if err := jsonv2.UnmarshalDecode(dec, &entry); err != nil {
+			if err == io.EOF {
+				break
+			}
 			continue
 		}
 		result.TotalCount++
 		result.StatusCounts[entry.Status]++
 	}
+
+	// encoding/json
+	// decoder := json.NewDecoder(file)
+	// for decoder.More() {
+	// 	var entry logparser.LogEntry
+	// 	if err := decoder.Decode(&entry); err != nil {
+	// 		continue
+	// 	}
+	// 	result.TotalCount++
+	// 	result.StatusCounts[entry.Status]++
+	// }
 
 	return result, nil
 }

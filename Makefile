@@ -34,7 +34,8 @@ w3:
 	go run ./workshop/phase3/main.go
 
 w4:
-	go run ./workshop/phase4/main.go
+	GOEXPERIMENT=jsonv2 go run ./workshop/phase4/main.go
+# 	go run ./workshop/phase4/main.go
 
 # Solution Phases
 s1:
@@ -48,3 +49,8 @@ s3:
 
 s4:
 	go run ./solutions/phase4/main.go
+
+# Profiling
+.PHONY: prof
+prof:
+	go tool pprof -http=:8080 cpu.prof
