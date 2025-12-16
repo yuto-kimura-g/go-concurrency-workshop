@@ -48,3 +48,8 @@ s3:
 
 s4:
 	go run ./solutions/phase4/main.go
+
+# Profiling
+.PHONY: prof
+prof:
+	go tool pprof -http=:8080 cpu.prof
